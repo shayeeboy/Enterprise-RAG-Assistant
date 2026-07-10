@@ -19,7 +19,7 @@ module.exports = {
 
   // --- LLM: local & free by default via Ollama; provider-agnostic ---
   LLM_PROVIDER: (process.env.LLM_PROVIDER || "ollama").toLowerCase(), // ollama | openai-compatible
-  LLM_MODEL: process.env.LLM_MODEL || "llama3.1:8b",
+  LLM_MODEL: process.env.LLM_MODEL || "llama3.2:3b", // small, fast default; bump to llama3.1:8b for higher quality
   OLLAMA_HOST: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
   LLM_BASE_URL: process.env.LLM_BASE_URL || "", // for any OpenAI-compatible endpoint
   LLM_API_KEY: process.env.LLM_API_KEY || "",

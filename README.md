@@ -231,7 +231,7 @@ npm install
 cp .env.example .env           # set DATABASE_URL; the LLM defaults are free/local
 
 # one-time: install the local LLM runner (https://ollama.com), then pull a model
-ollama pull llama3.1:8b        # or qwen2.5:7b-instruct, etc.
+ollama pull llama3.2:3b        # small/fast default; llama3.1:8b for higher quality
 
 # ask a question (CLI)
 npm run query -- "How should I practice a difficult passage?"
@@ -310,5 +310,5 @@ the CLI or `npm run serve` for the local API + chat UI.
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |
 | Hybrid search | pgvector cosine + Postgres full-text, fused with RRF | Combines semantic + keyword recall, no extra service |
 | Reranking (Phase 2) | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
-| LLM reasoning (Phase 2) | **Ollama** (local, e.g. `llama3.1:8b`), provider-pluggable | Zero-cost, offline; swap to any OpenAI-compatible endpoint via env |
+| LLM reasoning (Phase 2) | **Ollama** (local, default `llama3.2:3b`; `llama3.1:8b` for higher quality), provider-pluggable | Zero-cost, offline; swap to any OpenAI-compatible endpoint via env |
 | Query API + UI (Phase 2) | Express + static chat page (`server.js`, `public/`) | Runs locally since the LLM is local; same Node stack as the rest |
