@@ -1,0 +1,21 @@
+{
+  "name": "ai-native-piano-rag",
+  "version": "1.0.0",
+  "description": "Offline ingestion pipeline for an Enterprise Learning RAG Assistant — Piano Learning knowledge base",
+  "main": "scripts/run_all.js",
+  "scripts": {
+    "parse": "node scripts/01_parse.js",
+    "chunk": "node scripts/02_chunk.js",
+    "metadata": "node scripts/03_metadata.js",
+    "embed": "node scripts/04_embed.js",
+    "index": "node scripts/05_index.js",
+    "offline": "npm run parse && npm run chunk && npm run metadata",
+    "build": "npm run offline && npm run embed && npm run index"
+  },
+  "dependencies": {
+    "pg": "^8.11.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
