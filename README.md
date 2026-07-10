@@ -239,6 +239,9 @@ VERBOSE=1 npm run query -- "exercises for weak 4th and 5th fingers"
 
 # or run the local API + chat UI
 npm run serve                  # http://localhost:8080  (POST /ask, GET /health)
+
+# verify every layer is wired up and the DB is loaded (read-only)
+npm run smoke                  # checks DB, embeddings, retrieval, rerank, LLM
 ```
 
 The embedding and reranker models download once on first use (cached under
