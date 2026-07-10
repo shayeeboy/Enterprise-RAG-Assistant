@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Piano Learning RAG Assistant</title>
+<style>
+  :root{
+    --ink:#12100E; --paper:#F7F4EF; --raised:#FCFAF6; --accent:#8A5A2B;
+    --accent-soft:#EBDCC8; --slate:#6B655C; --rule:#DED7CB;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#EDE8E0; --paper:#17150F; --raised:#201D16; --accent:#D8A860;
+           --accent-soft:#3A3020; --slate:#A69F92; --rule:#332E24; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; line-height:1.55;}
+  .wrap{max-width:760px; margin:0 auto; padding:32px 20px 120px;}
+  header h1{font-size:22px; margin:0 0 4px;}
+  header p{margin:0 0 24px; color:var(--slate); font-size:14px;}
+  .msg{border:1px solid var(--rule); background:var(--raised); border-radius:12px;
+    padding:16px 18px; margin:0 0 14px;}
+  .msg.user{background:var(--accent-soft); border-color:transparent;}
+  .msg .role{font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--slate); margin-bottom:6px;}
+  .msg .body{white-space:pre-wrap; font-size:15px;}
+  .cites{margin-top:12px; padding-top:10px; border-top:1px dashed var(--rule);
+    font-size:12.5px; color:var(--slate);}
+  .cites b{color:var(--ink);}
+  .meta{margin-top:8px; font-size:11px; color:var(--slate); font-family:ui-monospace,monospace;}
+  .bar{position:fixed; bottom:0; left:0; right:0; background:var(--paper);
+    border-top:1px solid var(--rule); padding:14px 20px;}
+  .bar-inner{max-width:760px; margin:0 auto; display:flex; gap:10px;}
+  input{flex:1; padding:12px 14px; border:1.5px solid var(--rule); border-radius:10px;
+    background:var(--raised); color:var(--ink); font-size:15px;}
+  input:focus{outline:none; border-color:var(--accent);}
+  button{padding:12px 20px; border:none; border-radius:10px; background:var(--accent);
+    color:#fff; font-weight:600; font-size:14px; cursor:pointer;}
+  button:disabled{opacity:.5; cursor:default;}
+  .hint{color:var(--slate); font-size:13px;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎹 Piano Learning RAG Assistant</h1>
+      <p>Ask about piano technique, practice methods, or the Hanon exercises. Answers are grounded in the knowledge base with citations.</p>
+    </header>
+    <div id="log">
+      <div class="msg">
+        <div class="role">Assistant</div>
+        <div class="body">Hi! Try: <em>"How should I practice a difficult passage?"</em> or <em>"What exercises help weak 4th and 5th fingers?"</em></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <form class="bar-inner" id="form">
+      <input id="q" placeholder="Ask a question…" autocomplete="off" autofocus>
+      <button id="send" type="submit">Ask</button>
+    </form>
+  </div>
+
+<script>
+  const log = document.getElementById('log');
+  const form = document.getElementById('form');
+  const input = document.getElementById('q');
+  const send = document.getElementById('send');
+
+  function el(cls, html){ const d=document.createElement('div'); d.className=cls; d.innerHTML=html; return d; }
+  function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  function addUser(text){
+    log.appendChild(el('msg user', `<div class="role">You</div><div class="body">${esc(text)}</div>`));
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+  function addAssistant(res){
+    let cites = '';
+    if(res.citations && res.citations.length){
+      cites = '<div class="cites"><b>Citations:</b><br>' + res.citations.map(c=>{
+        const p = c.page_start===c.page_end ? 'p.'+c.page_start : 'pp.'+c.page_start+'-'+c.page_end;
+        return `[${c.n}] ${esc(c.title)} — ${p} (${esc(c.content_type||'general')})`;
+      }).join('<br>') + '</div>';
+    }
+    const meta = res.meta ? `<div class="meta">${res.grounded===false?'⚠ ungrounded · ':''}model: ${esc(res.meta.model||'')} · retrieved ${res.meta.retrieved} · reranked ${res.meta.reranked||0}</div>` : '';
+    log.appendChild(el('msg', `<div class="role">Assistant</div><div class="body">${esc(res.answer)}</div>${cites}${meta}`));
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const q = input.value.trim();
+    if(!q) return;
+    addUser(q);
+    input.value=''; send.disabled=true; input.disabled=true;
+    const thinking = el('msg', `<div class="role">Assistant</div><div class="body hint">Thinking… (retrieving, reranking, reasoning)</div>`);
+    log.appendChild(thinking); window.scrollTo(0, document.body.scrollHeight);
+    try{
+      const r = await fetch('/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ question: q }) });
+      const res = await r.json();
+      thinking.remove();
+      addAssistant(res);
+    }catch(err){
+      thinking.remove();
+      addAssistant({ answer:'Request failed: '+err.message });
+    }finally{
+      send.disabled=false; input.disabled=false; input.focus();
+    }
+  });
+</script>
+</body>
+</html>

@@ -96,7 +96,7 @@ async function main() {
   const embeddedPath = path.join(CHUNKS_DIR, "all_chunks.embedded.json");
   if (!fs.existsSync(embeddedPath)) {
     console.error(
-      `Missing ${embeddedPath}. Run scripts/04_embed.js first (requires VOYAGE_API_KEY).`
+      `Missing ${embeddedPath}. Run scripts/04_embed.js first (local embeddings, no API key).`
     );
     process.exit(1);
   }

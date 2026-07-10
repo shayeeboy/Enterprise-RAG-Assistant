@@ -1,8 +1,12 @@
-# AI-Native Piano Learning Assistant — RAG Ingestion Pipeline
+# AI-Native Piano Learning Assistant — RAG Pipeline
 
-An offline retrieval-augmented generation (RAG) ingestion pipeline that turns
-a piano-learning knowledge base into a queryable vector database. Built as
-part of [My AI Portfolio](https://github.com/shayeeboy) alongside the
+A retrieval-augmented generation (RAG) assistant over a piano-learning
+knowledge base, in two phases: an **offline ingestion pipeline** (Phase 1) that
+turns source PDFs into a queryable vector database, and a **query-time
+assistant** (Phase 2) that answers questions from that database with citations
+and guardrails. Every stage runs on free, local, open-source models — no paid
+API anywhere. Built as part of
+[My AI Portfolio](https://github.com/shayeeboy) alongside the
 [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native-diagnostic).
 
 **Knowledge base (this build):**
@@ -168,6 +172,82 @@ Schema in `sql/schema.sql`:
 
 ---
 
+## The Assistant (query time — Phase 2)
+
+Phase 1 loads the vector DB; Phase 2 answers questions from it. The assistant
+runs the full retrieval-augmented workflow below, every stage on free/local
+tooling — the same local embedding model as ingestion, a local cross-encoder
+reranker, and a local LLM via Ollama. No stage calls a paid API.
+
+```
+User Question
+   → Query Rewrite       local LLM expands/clarifies the query
+   → Embedding           mxbai-embed-large-v1 (same model as ingestion)
+   → Hybrid Search       pgvector cosine + Postgres full-text
+   → Scoring             Reciprocal Rank Fusion of the two result sets
+   → Threshold           drop low-similarity / non-matching candidates
+   → Reranking           bge-reranker-base cross-encoder scores each pair
+   → Top-K Chunks        keep the best K for the prompt
+   → Prompt Augmentation numbered, citable context blocks
+   → LLM Reasoning       local model answers from the context only
+   → Generated Answer
+   → Citations           map [n] markers back to title + page
+   → Guardrails          input checks; refuse when unsupported; grounding check
+   → Response
+```
+
+**Each step → its module** (`src/rag/`):
+
+| Workflow step | Module | Free/local tool |
+|---|---|---|
+| Query Rewrite | `rewrite.js` | local LLM (Ollama) |
+| Embedding | `embed.js` | Transformers.js · `mxbai-embed-large-v1` |
+| Hybrid Search + Scoring + Threshold | `retrieve.js` | pgvector + Postgres FTS + RRF |
+| Reranking + Top-K | `rerank.js` | Transformers.js · `bge-reranker-base` |
+| Prompt Augmentation | `prompt.js` | — (string assembly) |
+| LLM Reasoning | `llm.js` | Ollama (pluggable) |
+| Citations + Guardrails | `guardrails.js` | rule-based |
+| Orchestration | `pipeline.js` | — |
+
+### Why these tools (all free, no billing)
+
+- **Local cross-encoder reranking** (`Xenova/bge-reranker-base`): the
+  first-stage bi-encoder is fast but coarse; a cross-encoder re-scores each
+  (question, chunk) pair jointly for much better precision — on CPU, no API key.
+- **Hybrid search via RRF**: dense vectors catch paraphrase, keyword search
+  catches exact terms (finger numbers, "Hanon"); Reciprocal Rank Fusion merges
+  the two rankings without calibrating their different score scales.
+- **Local LLM via Ollama**: keeps the assistant zero-cost and offline. The
+  provider is pluggable — set `LLM_PROVIDER=openai-compatible` + `LLM_BASE_URL`
+  to point at any hosted endpoint instead, without touching the pipeline.
+- **Guardrails**: if nothing clears the relevance threshold the assistant
+  refuses rather than inventing an answer, and the generated answer is checked
+  for real citations before it's returned.
+
+### Setup & run
+
+```bash
+npm install
+cp .env.example .env           # set DATABASE_URL; the LLM defaults are free/local
+
+# one-time: install the local LLM runner (https://ollama.com), then pull a model
+ollama pull llama3.1:8b        # or qwen2.5:7b-instruct, etc.
+
+# ask a question (CLI)
+npm run query -- "How should I practice a difficult passage?"
+VERBOSE=1 npm run query -- "exercises for weak 4th and 5th fingers"
+
+# or run the local API + chat UI
+npm run serve                  # http://localhost:8080  (POST /ask, GET /health)
+```
+
+The embedding and reranker models download once on first use (cached under
+`node_modules`). Retrieval and reranking are fully local; only the final answer
+needs the LLM. Tune `TOP_K`, `VECTOR_THRESHOLD`, `RERANK_THRESHOLD`, and
+`ENABLE_QUERY_REWRITE` in `.env`.
+
+---
+
 ## Repo structure
 
 ```
@@ -183,7 +263,17 @@ rag-pipeline/
 │   ├── 02_chunk.js
 │   ├── 03_metadata.js
 │   ├── 04_embed.js            ← local embeddings (Transformers.js, no API key)
-│   └── 05_index.js            ← requires DATABASE_URL
+│   ├── 05_index.js            ← requires DATABASE_URL
+│   └── 06_query.js            ← Phase 2: ask a question from the CLI
+├── src/rag/                   ← Phase 2 query library (one module per stage)
+│   ├── pipeline.js            ← orchestrates the full workflow
+│   ├── rewrite.js  embed.js  retrieve.js  rerank.js
+│   ├── prompt.js   llm.js     guardrails.js
+│   ├── db.js                  ← pooled Neon connection
+│   └── config.js              ← env-driven, free/local defaults
+├── server.js                 ← local API + chat UI (POST /ask, GET /health)
+├── public/index.html         ← minimal chat front end
+├── .env.example
 └── sql/
     └── schema.sql
 ```
@@ -203,6 +293,10 @@ npm run embed      # optional: EMBED_MODEL=... to swap the model
 DATABASE_URL=postgres://... npm run index
 ```
 
+Phase 2 (querying the loaded DB) is covered in
+[The Assistant](#the-assistant-query-time--phase-2) above — `npm run query` for
+the CLI or `npm run serve` for the local API + chat UI.
+
 ## Tools & services
 
 | Layer | Tool/Service | Why |
@@ -214,4 +308,7 @@ DATABASE_URL=postgres://... npm run index
 | Vector database | **Neon Postgres + pgvector** | Serverless Postgres with native vector search; one DB for metadata + vectors |
 | DB indexing | HNSW (pgvector) | Better recall/speed for this KB size, incremental build |
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |
-| Hosting (future: query API) | Render (free tier) | Same pattern as `ai-native-diagnostic` v3 backend |
+| Hybrid search | pgvector cosine + Postgres full-text, fused with RRF | Combines semantic + keyword recall, no extra service |
+| Reranking (Phase 2) | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
+| LLM reasoning (Phase 2) | **Ollama** (local, e.g. `llama3.1:8b`), provider-pluggable | Zero-cost, offline; swap to any OpenAI-compatible endpoint via env |
+| Query API + UI (Phase 2) | Express + static chat page (`server.js`, `public/`) | Runs locally since the LLM is local; same Node stack as the rest |
