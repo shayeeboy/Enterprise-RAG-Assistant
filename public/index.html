@@ -104,6 +104,20 @@
   async function ask(q){
     q = (q||'').trim();
     if(!q) return;
+
+    // The chat calls the backend at a relative /ask URL, which only works when
+    // this page is SERVED by the app (npm run serve). Opened as a bare file
+    // there is no origin to resolve /ask against — guide the user instead of
+    // throwing a cryptic "Failed to parse URL" error.
+    if(location.protocol === 'file:' || !location.origin || location.origin === 'null'){
+      addUser(q);
+      const examples0 = document.getElementById('examples');
+      if(examples0) examples0.remove();
+      addAssistant({ answer: "⚠️ This app must be opened through its server, not as a file.\n\nIn a terminal, from the project folder:\n\n  npm run serve\n\nthen open http://localhost:8080 in your browser and ask again." });
+      input.value='';
+      return;
+    }
+
     addUser(q);
     input.value=''; send.disabled=true; input.disabled=true;
     const examples = document.getElementById('examples');
