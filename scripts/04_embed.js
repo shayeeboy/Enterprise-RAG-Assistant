@@ -1,76 +1,62 @@
 /**
- * STAGE 5: Embeddings
- * --------------------
+ * STAGE 5: Embeddings  (LOCAL / FREE)
+ * -----------------------------------
  * Input:  data/chunks/all_chunks.enriched.json
  * Output: data/chunks/all_chunks.embedded.json  (adds `embedding: number[]` to each chunk)
  *
- * IMPORTANT: This script makes real network calls to an embeddings API and
- * requires a live API key — it is NOT run inside the offline build sandbox
- * that produced this repo. Run it locally / in CI where network + secrets
- * are available:
+ * Runs a local embedding model via Transformers.js (@xenova/transformers) —
+ * no API key, no per-call billing, no network at inference time after the
+ * one-time model download. This replaces the paid Voyage AI call while
+ * keeping every other stage (chunking, metadata, indexing) untouched — that
+ * modularity is the whole point of the pipeline.
  *
- *     VOYAGE_API_KEY=xxxx node scripts/04_embed.js
+ *     node scripts/04_embed.js
  *
- * Why Voyage AI: Anthropic does not serve an embeddings endpoint itself and
- * recommends Voyage AI as its embeddings partner. `voyage-3.5` (1024-dim,
- * or configurable via `output_dimension`) works well for domain-specific
- * technical/instructional text like this knowledge base. Swap the fetch
- * call below for OpenAI's `text-embedding-3-small` or any other provider
- * without touching any other stage — that's the point of keeping this as
- * an isolated pipeline step.
+ * Model: mixedbread-ai/mxbai-embed-large-v1 — a BGE-large finetune that
+ * outputs 1024-dim vectors, so the SQL schema (`vector(1024)`) and the HNSW
+ * index are unchanged. Like Voyage, it's asymmetric: documents are embedded
+ * as-is here; at retrieval time queries should be prefixed with the model's
+ * query instruction (see RETRIEVAL_QUERY_PREFIX below).
+ *
+ * Override the model with EMBED_MODEL=... (must be a Transformers.js-compatible
+ * feature-extraction model; adjust EMBEDDING_DIM + sql/schema.sql if its
+ * dimension differs from 1024).
  */
 
 const fs = require("fs");
 const path = require("path");
 
 const CHUNKS_DIR = path.join(__dirname, "..", "data", "chunks");
-const MODEL = "voyage-3.5";
-const BATCH_SIZE = 32; // Voyage's batch embedding endpoint accepts arrays of input text
+const MODEL = process.env.EMBED_MODEL || "mixedbread-ai/mxbai-embed-large-v1";
+const BATCH_SIZE = 16; // local CPU inference — smaller batches keep memory flat
 const EMBEDDING_DIM = 1024;
 
-async function embedBatch(texts) {
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      input: texts,
-      model: MODEL,
-      input_type: "document", // vs "query" at retrieval time — asymmetric embeddings improve recall
-      output_dimension: EMBEDDING_DIM,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Voyage API error ${res.status}: ${await res.text()}`);
-  }
-  const data = await res.json();
-  return data.data.map((d) => d.embedding);
-}
-
-async function withRetry(fn, retries = 3, delayMs = 1500) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt === retries) throw err;
-      console.warn(`  retry ${attempt}/${retries} after error: ${err.message}`);
-      await new Promise((r) => setTimeout(r, delayMs * attempt));
-    }
-  }
-}
+// mxbai/BGE use CLS pooling; documents need no prefix, queries do. Kept here
+// so the retrieval side of the app can import the exact same string.
+const RETRIEVAL_QUERY_PREFIX =
+  "Represent this sentence for searching relevant passages: ";
 
 async function main() {
-  if (!process.env.VOYAGE_API_KEY) {
-    console.error(
-      "VOYAGE_API_KEY is not set. This stage requires network access and a live " +
-        "API key, so it's meant to run outside this offline build sandbox.\n" +
-        "Example: VOYAGE_API_KEY=xxxx node scripts/04_embed.js"
-    );
-    process.exit(1);
-  }
+  // @xenova/transformers is ESM-only; load it via dynamic import from CommonJS.
+  const { pipeline } = await import("@xenova/transformers");
+
+  console.log(`Loading local embedding model: ${MODEL}`);
+  console.log("(first run downloads the model to ./node_modules/@xenova cache — this can take a few minutes)");
+
+  let lastPct = -1;
+  const extractor = await pipeline("feature-extraction", MODEL, {
+    quantized: true, // ~4x smaller download, negligible quality loss for retrieval
+    progress_callback: (p) => {
+      if (p.status === "progress" && typeof p.progress === "number") {
+        const pct = Math.floor(p.progress / 10) * 10;
+        if (pct !== lastPct) {
+          lastPct = pct;
+          process.stdout.write(`  downloading ${p.file || ""}: ${pct}%\r`);
+        }
+      }
+    },
+  });
+  console.log("\nModel loaded. Embedding chunks...");
 
   const chunks = JSON.parse(
     fs.readFileSync(path.join(CHUNKS_DIR, "all_chunks.enriched.json"), "utf-8")
@@ -79,8 +65,23 @@ async function main() {
   const embedded = [];
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
-    const embeddings = await withRetry(() => embedBatch(batch.map((c) => c.text)));
-    batch.forEach((c, j) => embedded.push({ ...c, embedding: embeddings[j] }));
+    const output = await extractor(
+      batch.map((c) => c.text),
+      { pooling: "cls", normalize: true }
+    );
+    const vectors = output.tolist(); // [batch][EMBEDDING_DIM]
+
+    batch.forEach((c, j) => {
+      const vec = vectors[j];
+      if (vec.length !== EMBEDDING_DIM) {
+        throw new Error(
+          `Expected ${EMBEDDING_DIM}-dim embedding but got ${vec.length}. ` +
+            `Update EMBEDDING_DIM and sql/schema.sql to match the model.`
+        );
+      }
+      embedded.push({ ...c, embedding: vec });
+    });
+
     console.log(`Embedded ${Math.min(i + BATCH_SIZE, chunks.length)}/${chunks.length}`);
   }
 
@@ -88,10 +89,14 @@ async function main() {
     path.join(CHUNKS_DIR, "all_chunks.embedded.json"),
     JSON.stringify(embedded, null, 2)
   );
-  console.log(`Done. ${embedded.length} chunks embedded at ${EMBEDDING_DIM} dimensions.`);
+  console.log(
+    `Done. ${embedded.length} chunks embedded at ${EMBEDDING_DIM} dimensions with ${MODEL} (local, no API cost).`
+  );
 }
 
 main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+module.exports = { RETRIEVAL_QUERY_PREFIX };

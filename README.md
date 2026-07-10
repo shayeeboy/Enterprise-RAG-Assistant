@@ -77,16 +77,22 @@ PDFs — see *Design decisions* below.)
 
 ### 5. Embeddings — `scripts/04_embed.js`
 
-- Calls **Voyage AI**'s `voyage-3.5` model (Anthropic's recommended
-  embeddings partner — Anthropic does not serve its own embeddings
-  endpoint), batching 32 chunks per request with retry/backoff.
-- Uses `input_type: "document"` at ingest time and `input_type: "query"` at
-  retrieval time — Voyage's asymmetric embeddings measurably improve
-  retrieval quality over using the same embedding type for both.
+- Runs a **local embedding model** — `mixedbread-ai/mxbai-embed-large-v1`
+  (a BGE-large finetune) — via **Transformers.js** (`@xenova/transformers`).
+  No API key, no per-call billing, and no network at inference time after
+  the one-time model download. Chunks are embedded in batches of 16 with
+  CLS pooling and L2 normalization.
+- **Asymmetric retrieval** is preserved: documents are embedded as-is here,
+  while queries should be prefixed at retrieval time with the model's
+  instruction (`RETRIEVAL_QUERY_PREFIX`, exported from `04_embed.js`) —
+  the same document-vs-query asymmetry that improves recall.
 - 1,024-dimensional output — a reasonable balance of retrieval quality vs.
-  storage/index size for a knowledge base this size (985 chunks).
-- **Requires `VOYAGE_API_KEY` and network access** — not run in the offline
-  build sandbox; run this in your local environment or CI pipeline.
+  storage/index size for a knowledge base this size (985 chunks), and it
+  keeps the `vector(1024)` schema and HNSW index unchanged.
+- **Swap-in note:** the model is pluggable via `EMBED_MODEL=...`, and because
+  each stage is isolated you can drop in a hosted provider (Voyage AI's
+  `voyage-3.5`, OpenAI `text-embedding-3-*`, etc.) by editing only this file
+  — adjust `EMBEDDING_DIM` + `sql/schema.sql` if the dimension differs.
 
 ### 6. Metadata — `scripts/03_metadata.js`
 
@@ -141,13 +147,17 @@ Schema in `sql/schema.sql`:
   database for both structured metadata and vectors means metadata
   filtering and vector search happen in a single SQL query — simpler
   ops for a KB this size, and Neon has first-class pgvector support.
-- **Voyage AI for embeddings**: Anthropic doesn't offer an embeddings
-  endpoint and points to Voyage AI as its recommended partner.
+- **Local embeddings over a paid API**: embeddings run on-device with
+  `mixedbread-ai/mxbai-embed-large-v1` via Transformers.js — zero API cost,
+  no keys, fully reproducible offline. It's a 1024-dim BGE-large finetune,
+  so quality is competitive with hosted options while keeping the schema
+  identical. The stage stays provider-agnostic: swapping in a hosted
+  embedder (Voyage AI, OpenAI, etc.) touches only `04_embed.js`.
 - **Metadata before embeddings in execution order**: the diagram lists
   Embeddings → Metadata, but running metadata extraction first means the
-  (expensive, paid, network-dependent) embedding call only happens once
-  the chunk boundaries and tags are finalized — avoids re-embedding if a
-  metadata rule changes.
+  (comparatively expensive) embedding pass only happens once the chunk
+  boundaries and tags are finalized — avoids re-embedding if a metadata
+  rule changes.
 - **Known limitation — Hanon notation**: `Nº 1` through `Nº 20` are
   primarily musical staff notation, not text. `pdftotext` extracts the
   surrounding instructional prose (fingering guidance, tempo markings,
@@ -171,7 +181,7 @@ rag-pipeline/
 │   ├── 01_parse.js
 │   ├── 02_chunk.js
 │   ├── 03_metadata.js
-│   ├── 04_embed.js            ← requires VOYAGE_API_KEY
+│   ├── 04_embed.js            ← local embeddings (Transformers.js, no API key)
 │   └── 05_index.js            ← requires DATABASE_URL
 └── sql/
     └── schema.sql
@@ -185,8 +195,10 @@ npm install
 # offline stages — no network/API keys needed
 npm run offline    # parse → chunk (+overlap) → metadata
 
-# online stages — run where you have network + credentials
-VOYAGE_API_KEY=xxx npm run embed
+# embeddings — local model, no API key (first run downloads the model)
+npm run embed      # optional: EMBED_MODEL=... to swap the model
+
+# indexing — needs a Postgres (Neon) connection string
 DATABASE_URL=postgres://... npm run index
 ```
 
@@ -197,7 +209,7 @@ DATABASE_URL=postgres://... npm run index
 | Runtime | Node.js | Matches existing portfolio stack |
 | PDF text extraction | `poppler-utils` (`pdftotext`) | Fast, preserves page breaks & layout, no API cost |
 | Chunking / metadata | Plain JS (no framework) | Small, auditable, no black-box chunking library |
-| Embeddings | **Voyage AI** (`voyage-3.5`) | Anthropic's recommended embeddings partner |
+| Embeddings | **Transformers.js** + `mxbai-embed-large-v1` (local, 1024-dim) | Free, no API key, reproducible offline; pluggable via `EMBED_MODEL` |
 | Vector database | **Neon Postgres + pgvector** | Serverless Postgres with native vector search; one DB for metadata + vectors |
 | DB indexing | HNSW (pgvector) | Better recall/speed for this KB size, incremental build |
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |

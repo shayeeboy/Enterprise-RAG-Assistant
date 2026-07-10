@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   finger_numbers TEXT[],           -- e.g. {'3-4-5'}
   keywords       TEXT[],
 
-  -- embedding (stage 5) — voyage-3.5 at 1024 dimensions
+  -- embedding (stage 5) — mxbai-embed-large-v1 (local, Transformers.js) at 1024 dimensions
   embedding      vector(1024),
 
   created_at     TIMESTAMPTZ DEFAULT now()
