@@ -249,6 +249,18 @@ The embedding and reranker models download once on first use (cached under
 needs the LLM. Tune `TOP_K`, `VECTOR_THRESHOLD`, `RERANK_THRESHOLD`, and
 `ENABLE_QUERY_REWRITE` in `.env`.
 
+### Tests & CI
+
+- `npm run check` — offline wiring + logic checks (module imports, guardrails,
+  rank fusion, prompt assembly). No DB, LLM, or model downloads.
+- `npm run smoke` — full read-only health check against the live DB
+  (connectivity, embeddings, hybrid retrieval, rerank) plus an end-to-end answer
+  when the LLM is up.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on every push.
+Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` in CI
+(the LLM step warns rather than fails there, since Ollama isn't available in CI).
+
 ---
 
 ## Repo structure

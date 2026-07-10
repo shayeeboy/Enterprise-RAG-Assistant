@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: Wiring + logic (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  smoke:
+    name: Full smoke (DB + models)
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only run the full smoke test if a DATABASE_URL secret is configured.
+      # (Add it under Settings → Secrets and variables → Actions.)
+      - id: guard
+        env:
+          DB: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DB" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No DATABASE_URL secret set — skipping full smoke (offline check already passed)."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.run == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+        if: steps.guard.outputs.run == 'true'
+
+      # Downloads the embedding + reranker models on first run. No Ollama in CI,
+      # so the LLM check warns (non-fatal); DB, embedding, retrieval and rerank
+      # are all exercised against the live Neon database.
+      - run: npm run smoke
+        if: steps.guard.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

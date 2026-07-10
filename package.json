@@ -13,6 +13,7 @@
     "build": "npm run offline && npm run embed && npm run index",
     "query": "node scripts/06_query.js",
     "serve": "node server.js",
+    "check": "node scripts/check.js",
     "smoke": "node scripts/smoke.js"
   },
   "dependencies": {

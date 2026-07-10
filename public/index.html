@@ -39,6 +39,11 @@
     color:#fff; font-weight:600; font-size:14px; cursor:pointer;}
   button:disabled{opacity:.5; cursor:default;}
   .hint{color:var(--slate); font-size:13px;}
+  .examples{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px;}
+  .chip{background:var(--raised); color:var(--ink); border:1.5px solid var(--rule);
+    border-radius:999px; padding:8px 14px; font-size:13px; cursor:pointer; font-weight:500;}
+  .chip:hover{border-color:var(--accent); color:var(--accent);}
+  .examples-label{font-size:12px; color:var(--slate); margin:0 0 6px;}
 </style>
 </head>
 <body>
@@ -50,7 +55,15 @@
     <div id="log">
       <div class="msg">
         <div class="role">Assistant</div>
-        <div class="body">Hi! Try: <em>"How should I practice a difficult passage?"</em> or <em>"What exercises help weak 4th and 5th fingers?"</em></div>
+        <div class="body">Hi! Ask me anything about piano practice, technique, or the Hanon exercises — or try one of these:</div>
+        <div class="examples-label">Example questions</div>
+        <div class="examples" id="examples">
+          <button class="chip" type="button">How should I practice a difficult passage?</button>
+          <button class="chip" type="button">What exercises help weak 4th and 5th fingers?</button>
+          <button class="chip" type="button">How do I build finger independence?</button>
+          <button class="chip" type="button">What is the best way to memorize a piece?</button>
+          <button class="chip" type="button">How should a beginner start practicing?</button>
+        </div>
       </div>
     </div>
   </div>
@@ -88,12 +101,13 @@
     window.scrollTo(0, document.body.scrollHeight);
   }
 
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const q = input.value.trim();
+  async function ask(q){
+    q = (q||'').trim();
     if(!q) return;
     addUser(q);
     input.value=''; send.disabled=true; input.disabled=true;
+    const examples = document.getElementById('examples');
+    if(examples) examples.remove();
     const thinking = el('msg', `<div class="role">Assistant</div><div class="body hint">Thinking… (retrieving, reranking, reasoning)</div>`);
     log.appendChild(thinking); window.scrollTo(0, document.body.scrollHeight);
     try{
@@ -107,7 +121,12 @@
     }finally{
       send.disabled=false; input.disabled=false; input.focus();
     }
-  });
+  }
+
+  form.addEventListener('submit', (e)=>{ e.preventDefault(); ask(input.value); });
+  document.querySelectorAll('#examples .chip').forEach(b=>
+    b.addEventListener('click', ()=> ask(b.textContent))
+  );
 </script>
 </body>
 </html>
