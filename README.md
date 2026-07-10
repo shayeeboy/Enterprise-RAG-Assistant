@@ -23,9 +23,10 @@ Knowledge Base → Document Parsing → Chunking → Chunk Overlap → Embedding
 
 Each stage is an isolated script in `scripts/`, so any stage can be swapped
 (a different embedding model, a different vector DB) without touching the
-others. Stages 1–4 run fully offline on this repo's contents. Stages 5–6
-require network access and API credentials, so they're written as
-production-ready scripts meant to run in your own environment or CI.
+others. Every stage but the last runs fully offline on this repo's contents —
+including embeddings, which use a local model with no API key. Only the final
+indexing stage needs network access, for the Neon Postgres database (a
+`DATABASE_URL`); no third-party API credentials are required at any stage.
 
 ### 1. Knowledge Base
 
