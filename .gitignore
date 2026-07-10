@@ -3,3 +3,6 @@ node_modules/
 .env.*
 *.log
 .DS_Store
+
+# Generated embedding output — ~30MB of vectors, regenerable via `npm run embed`
+data/chunks/all_chunks.embedded.json
