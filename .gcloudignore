@@ -1,0 +1,15 @@
+# Keep the Cloud Run source upload lean (mirrors .dockerignore).
+.git
+node_modules
+.env
+.env.*
+!.env.example
+*.log
+data/raw
+data/uploads
+data/parsed
+data/chunks
+docs
+assets
+deploy
+.github

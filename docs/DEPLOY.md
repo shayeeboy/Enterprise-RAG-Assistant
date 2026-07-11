@@ -30,7 +30,45 @@ https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://YOUR-BACKEND&c
 The backend loads the embedding + reranker models in memory (~1 GB peak), so
 **RAM is the deciding factor**.
 
-### Recommended: Hugging Face Spaces (Docker) — 16 GB RAM free
+### Recommended: Google Cloud Run — runs the Dockerfile unchanged
+
+Cloud Run builds this repo's root `Dockerfile`, sets `PORT` (server.js reads it),
+scales to zero when idle, and its free tier covers a portfolio demo's usage.
+Easiest via **Cloud Shell** (browser, gcloud pre-installed, no local setup):
+
+```bash
+# 1. In the Google Cloud Console, create/select a project with billing enabled,
+#    then open Cloud Shell and run:
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
+
+# 2. Store the two secrets (paste your rotated values — stays in your shell):
+printf '%s' 'YOUR_NEON_DATABASE_URL' | gcloud secrets create rag-database-url --data-file=-
+printf '%s' 'YOUR_GROQ_API_KEY'      | gcloud secrets create rag-groq-key     --data-file=-
+
+# 3. Grant Cloud Run's runtime service account access to the secrets:
+PROJ=$(gcloud config get-value project)
+NUM=$(gcloud projects describe "$PROJ" --format='value(projectNumber)')
+SA="$NUM-compute@developer.gserviceaccount.com"
+for S in rag-database-url rag-groq-key; do
+  gcloud secrets add-iam-policy-binding "$S" --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
+done
+
+# 4. Deploy from source (uses the root Dockerfile):
+git clone https://github.com/shayeeboy/Enterprise-RAG-Assistant && cd Enterprise-RAG-Assistant
+gcloud run deploy rag-assistant \
+  --source . --region us-central1 \
+  --memory 2Gi --cpu 1 --timeout 600 --min-instances 0 \
+  --allow-unauthenticated \
+  --set-env-vars LLM_PROVIDER=openai-compatible,LLM_BASE_URL=https://api.groq.com/openai/v1,LLM_MODEL=llama-3.3-70b-versatile,ALLOWED_ORIGINS=https://shayeeboy.github.io \
+  --set-secrets DATABASE_URL=rag-database-url:latest,LLM_API_KEY=rag-groq-key:latest
+```
+
+Cloud Run prints a **Service URL** (`https://rag-assistant-xxxxx-uc.a.run.app`).
+Use it as the `?api=` value. First request after a cold start is slow (~1–2 min)
+while the embedding + reranker models download into the container.
+
+### Alternative: Hugging Face Spaces (Docker) — 16 GB RAM free
 
 A thin Space that pulls the app from GitHub keeps one source of truth. The two
 files to put in the Space are ready in [`deploy/huggingface/`](../deploy/huggingface/).
