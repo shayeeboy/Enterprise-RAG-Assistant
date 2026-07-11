@@ -69,7 +69,18 @@ automatically (via `.github/workflows/stats.yml`); search individual attempts
 with `npm run logs -- "your term"`, or hit the live `/stats` endpoint.
 
 <!-- STATS:START -->
-_No queries logged yet — be the first: **[try the live demo](#try-it-live)**, then this table auto-updates._
+_Auto-updated from **1** logged queries · last refresh 2026-07-11._
+
+| Metric | Value |
+|---|---|
+| Total queries | 1 |
+| Grounded (cited) | 100% |
+| Avg latency | 24,439 ms |
+| p50 / p95 latency | 24,439 / 24,439 ms |
+| Avg stage split — rewrite · retrieve · rerank · llm | 382 · 11,383 · 12,267 · 406 ms |
+| Avg tokens / query | 2,113 |
+| Total tokens | 2,113 |
+| Total LLM cost | $0.000000 |
 <!-- STATS:END -->
 
 [↑ Back to top](#executive-summary)
