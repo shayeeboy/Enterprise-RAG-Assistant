@@ -17,7 +17,12 @@ RUN npm ci --omit=dev
 # App source.
 COPY . .
 
-# Hosts inject PORT (HF Spaces uses 7860). server.js reads process.env.PORT.
+# Pre-download the embedding + reranker models into the image cache so the
+# running container never fetches them into an in-memory filesystem at runtime
+# (critical on Cloud Run, whose filesystem counts against the memory limit).
+RUN node scripts/warmup.js
+
+# Hosts inject PORT (Cloud Run/HF set it). server.js reads process.env.PORT.
 ENV NODE_ENV=production
 EXPOSE 8080
 
