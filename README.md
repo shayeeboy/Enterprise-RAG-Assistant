@@ -261,6 +261,16 @@ GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on every push.
 Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` in CI
 (the LLM step warns rather than fails there, since Ollama isn't available in CI).
 
+### Deploying off localhost (Phase 3)
+
+`server.js` is deploy-ready and env-driven for hosting the assistant behind a URL
+while keeping everything free — see [`docs/PHASE-3.md`](docs/PHASE-3.md) for the
+full analysis and hosting options. The knobs (all optional, default to open local
+dev): `ALLOWED_ORIGINS` (CORS), `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`,
+`ACCESS_CODE`, and — for a separately hosted front end — `window.RAG_API_BASE`.
+Because `llm.js` supports `LLM_PROVIDER=openai-compatible`, the LLM can move to a
+free-tier hosted endpoint (e.g. Groq) or stay fully self-hosted via Ollama.
+
 ---
 
 ## Repo structure

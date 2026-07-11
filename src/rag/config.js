@@ -34,6 +34,15 @@ module.exports = {
   RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // reranker relevance floor
   RRF_K: num(process.env.RRF_K, 60), // Reciprocal Rank Fusion constant
 
-  // --- Server ---
+  // --- Server / deployment ---
   PORT: num(process.env.PORT, 8080),
+  // Comma-separated allowlist of browser origins (e.g. https://you.github.io).
+  // Empty = allow all (fine for local dev; set it in production).
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  RATE_LIMIT_MAX: num(process.env.RATE_LIMIT_MAX, 30), // requests per window per IP
+  RATE_LIMIT_WINDOW_MS: num(process.env.RATE_LIMIT_WINDOW_MS, 60000),
+  ACCESS_CODE: process.env.ACCESS_CODE || "", // optional shared secret to gate /ask
 };

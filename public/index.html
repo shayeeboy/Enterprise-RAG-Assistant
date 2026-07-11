@@ -76,6 +76,13 @@
   </div>
 
 <script>
+  // When the front end is hosted separately from the backend (Phase 3), set
+  // these before this script runs, e.g. in a small inline <script> or via a
+  // build step:  window.RAG_API_BASE = 'https://your-backend'; window.RAG_ACCESS_CODE = '...';
+  // Left empty, the app calls its own origin (how `npm run serve` works locally).
+  const API_BASE = (window.RAG_API_BASE || '').replace(/\/$/, '');
+  const ACCESS_CODE = window.RAG_ACCESS_CODE || '';
+
   const log = document.getElementById('log');
   const form = document.getElementById('form');
   const input = document.getElementById('q');
@@ -105,11 +112,11 @@
     q = (q||'').trim();
     if(!q) return;
 
-    // The chat calls the backend at a relative /ask URL, which only works when
-    // this page is SERVED by the app (npm run serve). Opened as a bare file
-    // there is no origin to resolve /ask against — guide the user instead of
-    // throwing a cryptic "Failed to parse URL" error.
-    if(location.protocol === 'file:' || !location.origin || location.origin === 'null'){
+    // The chat calls the backend at `${API_BASE}/ask`. With no API_BASE set,
+    // that's a relative URL that only resolves when this page is SERVED by the
+    // app (npm run serve). Opened as a bare file there is no origin to resolve
+    // it against — guide the user instead of a cryptic "Failed to parse URL".
+    if(!API_BASE && (location.protocol === 'file:' || !location.origin || location.origin === 'null')){
       addUser(q);
       const examples0 = document.getElementById('examples');
       if(examples0) examples0.remove();
@@ -125,7 +132,7 @@
     const thinking = el('msg', `<div class="role">Assistant</div><div class="body hint">Thinking… (retrieving, reranking, reasoning)</div>`);
     log.appendChild(thinking); window.scrollTo(0, document.body.scrollHeight);
     try{
-      const r = await fetch('/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ question: q }) });
+      const r = await fetch(`${API_BASE}/ask`, { method:'POST', headers:{'Content-Type':'application/json', ...(ACCESS_CODE?{'x-access-code':ACCESS_CODE}:{})}, body: JSON.stringify({ question: q }) });
       const res = await r.json();
       thinking.remove();
       addAssistant(res);
