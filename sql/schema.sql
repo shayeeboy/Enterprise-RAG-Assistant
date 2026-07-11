@@ -50,6 +50,40 @@ ALTER TABLE chunks ADD COLUMN IF NOT EXISTS text_tsv tsvector
   GENERATED ALWAYS AS (to_tsvector('english', text)) STORED;
 CREATE INDEX IF NOT EXISTS chunks_text_tsv_idx ON chunks USING GIN (text_tsv);
 
+-- ============================================================
+-- Observability log (Phase 3) — one row per user query attempt.
+-- Auto-created by the API at runtime (src/rag/logstore.js); included here for
+-- reference. Powers `npm run logs` (search) and `npm run stats` (aggregates).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS query_logs (
+  id                  BIGSERIAL PRIMARY KEY,
+  trace_id            TEXT,
+  question            TEXT,
+  search_query        TEXT,
+  rewritten           BOOLEAN,
+  grounded            BOOLEAN,
+  ok                  BOOLEAN,
+  retrieved           INTEGER,
+  reranked            INTEGER,
+  citations           INTEGER,
+  provider            TEXT,
+  model               TEXT,
+  latency_total_ms    INTEGER,
+  latency_rewrite_ms  INTEGER,
+  latency_retrieve_ms INTEGER,
+  latency_rerank_ms   INTEGER,
+  latency_llm_ms      INTEGER,
+  tokens_prompt       INTEGER,
+  tokens_completion   INTEGER,
+  tokens_total        INTEGER,
+  cost_usd            NUMERIC(12,6),
+  error               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS query_logs_created_at_idx ON query_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS query_logs_question_fts_idx
+  ON query_logs USING GIN (to_tsvector('english', coalesce(question, '')));
+
 -- Example hybrid query: vector similarity + content_type filter
 -- SELECT chunk_id, text, page_start,
 --        1 - (embedding <=> $1::vector) AS similarity

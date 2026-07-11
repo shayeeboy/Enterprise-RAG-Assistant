@@ -11,7 +11,7 @@ const assert = require("assert");
 const pass = (name) => console.log("[PASS] " + name);
 
 // 1. every module imports cleanly (catches syntax / bad require paths)
-const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline"];
+const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore"];
 mods.forEach((m) => require("../src/rag/" + m));
 pass(`all modules import (${mods.length})`);
 

@@ -1,0 +1,51 @@
+name: Refresh observability stats
+
+# Recomputes aggregated observability from the query_logs table and commits the
+# updated table into the README (between the STATS markers). Runs on a schedule
+# and on demand. Requires a DATABASE_URL repository secret; skips cleanly if unset.
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: guard
+        env:
+          DB: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DB" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No DATABASE_URL secret set — skipping stats refresh."
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.run == 'true'
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        if: steps.guard.outputs.run == 'true'
+      - run: npm run stats
+        if: steps.guard.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Commit updated stats
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          if ! git diff --quiet README.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "chore: refresh observability stats [skip ci]"
+            git push
+          else
+            echo "No stats change."
+          fi

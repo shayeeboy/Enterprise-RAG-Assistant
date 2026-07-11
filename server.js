@@ -19,6 +19,7 @@ const path = require("path");
 const { answerQuestion } = require("./src/rag/pipeline");
 const { ping } = require("./src/rag/llm");
 const { pool } = require("./src/rag/db");
+const logstore = require("./src/rag/logstore");
 const cfg = require("./src/rag/config");
 
 const app = express();
@@ -82,6 +83,15 @@ app.get("/health", async (_req, res) => {
   res.json(out);
 });
 
+// Aggregated observability over all logged user attempts.
+app.get("/stats", async (_req, res) => {
+  try {
+    res.json(await logstore.getStats());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/ask", rateLimit, accessGate, async (req, res) => {
   const question = (req.body && req.body.question) || "";
   try {
@@ -101,12 +111,18 @@ app.post("/ask", rateLimit, accessGate, async (req, res) => {
         error: m.error || null,
       })
     );
+    // Persist the trace for searchable/aggregated observability (best-effort;
+    // awaited so it completes before a Cloud Run instance can freeze).
+    await logstore.logQuery(question, result);
     res.json(result);
   } catch (e) {
     console.error("ask failed:", e.message);
     res.status(500).json({ ok: false, answer: "Internal error handling the question.", error: e.message });
   }
 });
+
+// Ensure the observability table exists (non-fatal if the DB is unreachable).
+logstore.ensureSchema().catch((e) => console.warn("query_logs ensureSchema failed:", e.message));
 
 app.listen(cfg.PORT, () => {
   const cors = cfg.ALLOWED_ORIGINS.length ? cfg.ALLOWED_ORIGINS.join(", ") : "(open — dev)";

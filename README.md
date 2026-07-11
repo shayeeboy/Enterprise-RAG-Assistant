@@ -8,6 +8,11 @@ optional hosted piece (the LLM in Phase 3) uses a **free tier** — no paid API
 anywhere. Built as part of [My AI Portfolio](https://github.com/shayeeboy)
 alongside the [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native-diagnostic).
 
+> ### ▶ [Try the live assistant](https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://rag-assistant-694391756200.us-central1.run.app)
+> Ask a piano-practice question and get a grounded, cited answer. Free stack:
+> **GitHub Pages → Google Cloud Run → Neon pgvector → Groq**. (First question after
+> idle takes ~30 s while the free backend wakes; then it's quick.)
+
 ---
 
 ## Executive summary
@@ -35,7 +40,39 @@ and swappable.
 - **Grounded:** answers cite their sources by page; guardrails refuse when the knowledge base doesn't support an answer.
 - **Portable:** every stage is env-swappable (`EMBED_MODEL`, `RERANK_MODEL`, `LLM_PROVIDER`, …); no vendor lock-in.
 
-**Navigate:** [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
+**Navigate:** [Try it live](#try-it-live) · [Live observability](#live-observability) · [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
+
+---
+
+## Try it live
+
+**🎹 [Open the assistant →](https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://rag-assistant-694391756200.us-central1.run.app)**
+
+A static [GitHub Pages](https://shayeeboy.github.io/Enterprise-RAG-Assistant/) chat
+front end calling a [Google Cloud Run](https://rag-assistant-694391756200.us-central1.run.app/health)
+backend (Express + local retrieval/rerank) with **Groq** doing the reasoning and
+**Neon** holding the vectors — all on free tiers, $0.
+
+- Ask things like *"How do I build finger independence?"* or *"What exercises help weak 4th and 5th fingers?"*
+- Every answer cites its sources (book + page) and shows a live latency/tokens/cost line.
+- **Heads-up:** the backend scales to zero, so the first request after idle takes ~30 s to wake; subsequent ones are fast.
+
+[↑ Back to top](#executive-summary)
+
+---
+
+## Live observability
+
+Every query is traced and **persisted to a searchable Neon table** (`query_logs`)
+— see [Phase 3](#phase-3-hosting-and-observability). Aggregates below refresh
+automatically (via `.github/workflows/stats.yml`); search individual attempts
+with `npm run logs -- "your term"`, or hit the live `/stats` endpoint.
+
+<!-- STATS:START -->
+_No queries logged yet — be the first: **[try the live demo](#try-it-live)**, then this table auto-updates._
+<!-- STATS:END -->
+
+[↑ Back to top](#executive-summary)
 
 ---
 
@@ -337,7 +374,11 @@ returns a `meta` block:
 | **Cost** | `meta.costUsd` | `0` for local/Groq-free; set `LLM_COST_*_PER_1K` for a metered provider |
 
 It surfaces in the **API** response, a **one-line JSON server log** per request,
-the **CLI** timing line, and a **chat-UI** meta line under each answer.
+the **CLI** timing line, and a **chat-UI** meta line under each answer. In
+deployment it is also **persisted to a searchable `query_logs` table** in Neon
+(`src/rag/logstore.js`, auto-created on start) — powering `npm run logs`
+(full-text search of attempts), the `/stats` endpoint, and the auto-updated
+[Live observability](#live-observability) aggregates in this README.
 
 ### Decision: Path B — Groq free tier
 
@@ -380,11 +421,14 @@ optional and default to open local dev:
 - `window.RAG_API_BASE` / `window.RAG_ACCESS_CODE` — let a separately hosted
   (e.g. GitHub Pages) front end call the backend on another origin
 
-**Deployment:** the frontend auto-publishes to GitHub Pages
+**Deployment (live):** the frontend auto-publishes to **GitHub Pages**
 (`.github/workflows/pages.yml`) and takes the backend URL as a `?api=` query
-param; the backend ships with a `Dockerfile` for any container host. Step-by-step
-(Hugging Face Spaces / Render / Oracle) is in [`docs/DEPLOY.md`](docs/DEPLOY.md);
-the hosting analysis per path is in [`docs/PHASE-3.md`](docs/PHASE-3.md).
+param; the backend runs as a container on **Google Cloud Run** (scale-to-zero,
+free tier). Hugging Face Docker Spaces turned out to require a paid plan, and
+Render's free 512 MB is too small for the models, so **Cloud Run** was chosen —
+it runs the root `Dockerfile` unchanged at 1–4 GiB. Step-by-step for Cloud Run
+(and HF/Render/Oracle alternatives) is in [`docs/DEPLOY.md`](docs/DEPLOY.md); the
+per-path analysis is in [`docs/PHASE-3.md`](docs/PHASE-3.md).
 
 [↑ Back to top](#executive-summary)
 
@@ -437,7 +481,9 @@ rag-pipeline/
 | Reranking | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
 | LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`llama-3.3-70b-versatile`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER` |
 | API + UI | Express + static chat page (`server.js`, `public/`) | CORS/rate-limit/access-code hardened; same Node stack throughout |
-| Observability | in-house trace (`trace.js`) | Per-request latency/tokens/cost, no external SDK |
+| Backend hosting | **Google Cloud Run** (free tier, scale-to-zero) | Runs the Dockerfile unchanged at 1–4 GiB; chosen after HF Docker (paid) and Render (512 MB, too small) |
+| Frontend hosting | **GitHub Pages** (Actions deploy) | Static chat UI; points at the backend via `?api=` |
+| Observability | in-house trace (`trace.js`) + `query_logs` in Neon (`logstore.js`) | Per-request latency/tokens/cost; searchable + aggregated, no external SDK |
 
 ## Lessons learned
 
@@ -469,5 +515,8 @@ resolved them.
 | Assistant felt very slow | **Observability made it measurable:** the LLM stage is ~78% of a ~250 s request on CPU. Conclusion is now data-driven — local CPU inference is the bottleneck; a fast free-tier hosted LLM (e.g. Groq) or a GPU is the real fix, not retrieval tuning. |
 | Applied the fix (Path B) | Switched the LLM to **Groq's free tier** via the existing `openai-compatible` provider — env-only, no code change. With a reranker tune (`RERANK_INPUT` 20→10) total latency went **~252 s → ~11 s** at $0, with better answers. |
 | Neon connection string exposed in chat | Rotated each time and verified the old credential was dead; the real value lives only in the gitignored `.env`. |
+| HF Docker Spaces needed a paid plan (only static is free) | Pivoted the backend to **Google Cloud Run**, which runs the Dockerfile unchanged on its free tier. Don't assume a "free Docker host" — check the plan before committing. |
+| Cloud Run `/ask` OOM-killed (503) at 2 GiB | Cloud Run's filesystem is **in-memory**, so the runtime model download counts against RAM. Fixed by raising to 4 GiB and baking the models into the image at build (`scripts/warmup.js`) so nothing downloads at runtime. |
+| `Gaia id not found for email …` in Cloud Shell | Harmless background-telemetry error — the deploy still succeeds. Don't chase it. |
 
 [↑ Back to top](#executive-summary)
