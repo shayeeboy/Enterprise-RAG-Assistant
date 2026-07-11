@@ -8,11 +8,6 @@ optional hosted piece (the LLM in Phase 3) uses a **free tier** — no paid API
 anywhere. Built as part of [My AI Portfolio](https://github.com/shayeeboy)
 alongside the [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native-diagnostic).
 
-> ### ▶ [Try the live assistant](https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://rag-assistant-694391756200.us-central1.run.app)
-> Ask a piano-practice question and get a grounded, cited answer. Free stack:
-> **GitHub Pages → Google Cloud Run → Neon pgvector → Groq**. (First question after
-> idle takes ~30 s while the free backend wakes; then it's quick.)
-
 ---
 
 ## Executive Summary
