@@ -342,3 +342,33 @@ the CLI or `npm run serve` for the local API + chat UI.
 | Reranking (Phase 2) | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
 | LLM reasoning (Phase 2) | **Ollama** (local, default `llama3.2:3b`; `llama3.1:8b` for higher quality), provider-pluggable | Zero-cost, offline; swap to any OpenAI-compatible endpoint via env |
 | Query API + UI (Phase 2) | Express + static chat page (`server.js`, `public/`) | Runs locally since the LLM is local; same Node stack as the rest |
+
+## Lessons learned
+
+A concise log of the notable issues hit while building each phase, and what
+resolved them.
+
+**Phase 1 — Ingestion**
+
+| Issue | Resolution / lesson |
+|---|---|
+| Original design used a paid embedding API (Voyage AI) | Swapped for a local model (`mxbai-embed-large-v1`, Transformers.js), kept at 1024-dim so the schema and HNSW index were untouched. Isolating the embed stage made the swap a one-file change. |
+| Docs/comments still implied a paid API + network at embed time | Purged stale references; corrected the "offline vs. online stages" claim (only indexing needs the network — embeddings run locally). |
+
+**Phase 2 — Query assistant**
+
+| Issue | Resolution / lesson |
+|---|---|
+| DB `snake_case` vs app `camelCase` mismatch | Normalize at a single boundary (`retrieve.js`) so the rest of the pipeline sees one shape. |
+| `.env.example` was silently ignored by the `.env.*` gitignore rule and never committed | Added a `!.env.example` negation; verify ignore rules by actually staging, not just `git check-ignore`. |
+| Small model echoed the literal `[n]` from a `"cite as [n]"` prompt | Removed the placeholder from the prompt and strip a stray leading `[n]`; don't put literal tokens a model will parrot. |
+| `llama3.2:3b` sometimes answered without citations | The grounding guardrail flags ungrounded answers; guardrails must assume the model won't always comply (larger models cite more reliably). |
+
+**Phase 3 — Hosting prep & observability**
+
+| Issue | Resolution / lesson |
+|---|---|
+| `Failed to parse URL from /ask` | The page was opened as a file (no origin for a relative fetch). It must be served (`npm run serve`); added a UI guard and a configurable `RAG_API_BASE` for split hosting. |
+| CORS/rate-limit "not working" during testing | Stale background `node` servers were holding the port and serving old code. Kill dev servers between runs; a startup config log line now makes the running instance self-identify. |
+| Assistant felt very slow | **Observability made it measurable:** the LLM stage is ~78% of a ~250 s request on CPU. Conclusion is now data-driven — local CPU inference is the bottleneck; a fast free-tier hosted LLM (e.g. Groq) or a GPU is the real fix, not retrieval tuning. |
+| Neon connection string exposed in chat | Rotated each time and verified the old credential was dead; the real value lives only in the gitignored `.env`. |
