@@ -47,8 +47,8 @@ know when to say "I don't know"), different corpus.
   statistically meaningful usage evidence.
 - **Retrieval quality (the metric that actually matters, not yet
   measured):** "grounded" only confirms an answer *has* a citation, not
-  that it's the *right* passage. [[Recall@5 / Hit Rate@5 / MRR against a
-  held-out evaluation query set — see `eval/` once built]] is the metric
+  that it's the *right* passage. Recall@5 / Hit Rate@5 / MRR against a
+  held-out evaluation query set (see `eval/` once built) is the metric
   that would actually validate the system is retrieving correctly, and
   it's the next planned addition, not a claimed result.
 
