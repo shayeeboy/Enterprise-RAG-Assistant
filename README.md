@@ -10,6 +10,21 @@ alongside the [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native
 
 ---
 
+## Try it live
+
+**🎹 [Open the assistant →](https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://rag-assistant-694391756200.us-central1.run.app)**
+
+A static [GitHub Pages](https://shayeeboy.github.io/Enterprise-RAG-Assistant/) chat
+front end calling a [Google Cloud Run](https://rag-assistant-694391756200.us-central1.run.app/health)
+backend (Express + local retrieval/rerank) with **Groq** doing the reasoning and
+**Neon** holding the vectors — all on free tiers, $0.
+
+- Ask things like *"How do I build finger independence?"* or *"What exercises help weak 4th and 5th fingers?"*
+- Every answer cites its sources (book + page) and shows a live latency/tokens/cost line.
+- **Heads-up:** the backend scales to zero, so the first request after idle takes ~30 s to wake; subsequent ones are fast.
+
+---
+
 ## Executive Summary
 
 **Problem.** Piano method books and exercise references (Chang's
@@ -112,23 +127,6 @@ and swappable.
 - **Portable:** every stage is env-swappable (`EMBED_MODEL`, `RERANK_MODEL`, `LLM_PROVIDER`, …); no vendor lock-in.
 
 **Navigate:** [Try it live](#try-it-live) · [Live observability](#live-observability) · [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
-
----
-
-## Try it live
-
-**🎹 [Open the assistant →](https://shayeeboy.github.io/Enterprise-RAG-Assistant/?api=https://rag-assistant-694391756200.us-central1.run.app)**
-
-A static [GitHub Pages](https://shayeeboy.github.io/Enterprise-RAG-Assistant/) chat
-front end calling a [Google Cloud Run](https://rag-assistant-694391756200.us-central1.run.app/health)
-backend (Express + local retrieval/rerank) with **Groq** doing the reasoning and
-**Neon** holding the vectors — all on free tiers, $0.
-
-- Ask things like *"How do I build finger independence?"* or *"What exercises help weak 4th and 5th fingers?"*
-- Every answer cites its sources (book + page) and shows a live latency/tokens/cost line.
-- **Heads-up:** the backend scales to zero, so the first request after idle takes ~30 s to wake; subsequent ones are fast.
-
-[↑ Back to top](#executive-summary)
 
 ---
 
