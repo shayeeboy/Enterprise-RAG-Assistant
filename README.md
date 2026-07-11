@@ -64,12 +64,34 @@ to an enterprise KB, not the piano content itself.
   $0 LLM cost (Groq free tier). **Honest caveat:** this is based on 3
   logged queries so far — real signal on system behavior, not yet
   statistically meaningful usage evidence.
-- **Retrieval quality (the metric that actually matters, not yet
-  measured):** "grounded" only confirms an answer *has* a citation, not
-  that it's the *right* passage. Recall@5 / Hit Rate@5 / MRR against a
-  held-out evaluation query set (see `eval/` once built) is the metric
-  that would actually validate the system is retrieving correctly, and
-  it's the next planned addition, not a claimed result.
+- **Retrieval quality (first-pass eval, now measured):** "grounded" only
+  confirms an answer *has* a citation, not that it's the *right* passage.
+  A small labeled set (`eval/questions.json`, run via `npm run eval`)
+  measures Hit@5 / MRR and out-of-scope refusal against the live index —
+  currently **Hit@5 100% (8/8), MRR 0.938, refusal 100% (2/2)**. Caveat:
+  relevance is a keyword proxy over 10 questions, so this is a regression
+  signal, not human-judged ground truth; a larger judged set (plus
+  answer-correctness / hallucination-rate via an LLM judge) is the
+  stronger next step.
+
+**Acceptance criteria (retrieval quality).** Concrete, checkable targets —
+each with how it's verified and where the automated test lives:
+
+| Criterion | Target | Current | Checked by |
+|---|---|---|---|
+| Retrieval hit rate (Hit@5) | ≥ 80% of benchmark questions surface a relevant passage in the top 5 | **100% (8/8)** | `npm run eval` |
+| Rank quality (MRR) | higher is better | **0.938** | `npm run eval` |
+| Out-of-scope refusal | 100% of out-of-KB questions refused, none answered from irrelevant context | **100% (2/2)** | `npm run eval` |
+| Groundedness | every *answered* question carries ≥ 1 valid citation | **100% grounded** (live) | observability · `/stats` |
+| Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
+| Latency | p50 / p95 tracked and visible | p50 ~16.9s / p95 ~23.7s | observability · `/stats` |
+| Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
+
+**Not yet measured (honest gaps):** true hallucination rate and answer
+correctness / task-completion need judged ground truth (planned via an
+LLM-judge harness); Hit@5 uses a keyword-relevance proxy over a 10-question
+set, so it's a regression signal, not a human-validated benchmark; there is
+no response cache, so "cache hit rate" is N/A.
 
 **Key trade-off decisions.**
 - **Local embeddings + local reranker over hosted APIs, LLM kept
@@ -298,6 +320,18 @@ npm run embed      # optional: EMBED_MODEL=... to swap the model
 DATABASE_URL=postgres://... npm run index
 ```
 
+### Acceptance tests (ingestion integrity)
+
+Verified against the live index by **`npm run smoke`** (read-only):
+
+| Test case | Expectation | Source |
+|---|---|---|
+| Documents & chunks loaded | 2 documents, 985 chunks | functional test while building |
+| Every chunk embedded | 985/985 have a non-null vector | `npm run smoke` |
+| Embedding dimensionality | 1024-dim (matches `vector(1024)`) | `npm run smoke` |
+| Page ranges preserved | each chunk carries `page_start`/`page_end` (citation source of truth) | schema + parse stage |
+| Metadata populated | `content_type`/`skill_level` classified per chunk | metadata stage |
+
 ### Design decisions
 
 - **Neon over self-hosted Postgres**: serverless scale-to-zero fits a
@@ -424,8 +458,31 @@ needs the LLM. Tune `TOP_K`, `RERANK_INPUT`, `VECTOR_THRESHOLD`,
   when the LLM is up.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on every push.
-Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` in CI
-(the LLM step warns rather than fails there, since Ollama isn't available in CI).
+Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` and
+`npm run eval` in CI (the LLM step warns rather than fails there, since Ollama
+isn't available in CI).
+
+### Acceptance tests (retrieval & trust)
+
+Two automated suites map to the [acceptance criteria](#executive-summary):
+
+**`npm run check`** — offline unit acceptance of the trust-critical logic (no DB/LLM):
+
+| Test case | Asserts |
+|---|---|
+| Input guardrail | empty/oversized questions are rejected before any compute |
+| Citation validity | an invalid `[9]` marker against 2 sources is dropped; only real citations survive |
+| Grounding detection | an answer with no `[n]` is flagged ungrounded; one with `[1]` is grounded |
+| RRF fusion | a chunk present in both vector + keyword lists ranks first |
+| Prompt augmentation | context blocks are numbered `[1]…[k]` |
+
+**`npm run eval`** — retrieval-quality acceptance against the live index (`eval/questions.json`):
+
+| Test case | Target | Current |
+|---|---|---|
+| Hit@5 on 8 in-scope questions | ≥ 80% | 100% (8/8) |
+| MRR | higher is better | 0.938 |
+| Refusal on 2 out-of-scope questions | 100% refused | 100% (2/2) |
 
 [↑ Back to top](#executive-summary)
 
@@ -510,6 +567,20 @@ it runs the root `Dockerfile` unchanged at 1–4 GiB. Step-by-step for Cloud Run
 (and HF/Render/Oracle alternatives) is in [`docs/DEPLOY.md`](docs/DEPLOY.md); the
 per-path analysis is in [`docs/PHASE-3.md`](docs/PHASE-3.md).
 
+### Acceptance tests (hardening & observability)
+
+Verified functionally against the running Cloud Run service (`npm run smoke`
+covers DB + LLM health):
+
+| Test case | Expectation | Result |
+|---|---|---|
+| `GET /health` | `{ db: connected, llm: reachable }` | ✅ |
+| CORS — allowed origin | `Access-Control-Allow-Origin` reflects the Pages origin | ✅ |
+| CORS — disallowed origin | no ACAO header returned | ✅ |
+| Rate limit | rapid `/ask` returns `429` after `RATE_LIMIT_MAX` | ✅ |
+| Access code | `/ask` without valid `x-access-code` returns `401` when `ACCESS_CODE` set | ✅ |
+| Observability persistence | each `/ask` inserts a `query_logs` row; `/stats` aggregates; `npm run logs` searches | ✅ |
+
 [↑ Back to top](#executive-summary)
 
 ---
@@ -521,6 +592,7 @@ Enterprise-RAG-Assistant/
 ├── README.md                  ← this file
 ├── package.json
 ├── assets/                    ← phase architecture diagrams (SVG)
+├── eval/questions.json        ← labeled retrieval-quality benchmark (npm run eval)
 ├── docs/PHASE-3.md            ← hosting analysis, A/B results, observability
 ├── data/
 │   ├── raw/                   ← pdftotext output (gitignored — regenerate from PDFs)
@@ -564,6 +636,7 @@ Enterprise-RAG-Assistant/
 | Backend hosting | **Google Cloud Run** (free tier, scale-to-zero) | Runs the Dockerfile unchanged at 1–4 GiB; chosen after HF Docker (paid) and Render (512 MB, too small) |
 | Frontend hosting | **GitHub Pages** (Actions deploy) | Static chat UI; points at the backend via `?api=` |
 | Observability | in-house trace (`trace.js`) + `query_logs` in Neon (`logstore.js`) | Per-request latency/tokens/cost; searchable + aggregated, no external SDK |
+| Acceptance testing | in-house (`check.js` units · `smoke.js` integration · `eval.js` retrieval quality) | Hit@5/MRR/refusal + trust-logic assertions, no external test framework |
 
 ## Lessons learned
 
@@ -585,6 +658,7 @@ resolved them.
 | `.env.example` was silently ignored by the `.env.*` gitignore rule and never committed | Added a `!.env.example` negation; verify ignore rules by actually staging, not just `git check-ignore`. |
 | Small model echoed the literal `[n]` from a `"cite as [n]"` prompt | Removed the placeholder from the prompt and strip a stray leading `[n]`; don't put literal tokens a model will parrot. |
 | `llama3.2:3b` sometimes answered without citations | The grounding guardrail flags ungrounded answers; guardrails must assume the model won't always comply (larger models cite more reliably). |
+| Retrieval-quality eval caught out-of-scope questions being *answered* | The 0.30 vector threshold + rerank top-K fallback still surfaced irrelevant chunks, so "capital of France" got a piano-cited answer. Added a **rerank relevance floor** (`RELEVANCE_FLOOR`): if the best reranked score is below it, refuse. Out-of-scope refusal went 0/2 → 2/2 — the acceptance test drove the fix. |
 
 **Phase 3 — Hosting & observability**
 

@@ -35,7 +35,10 @@ module.exports = {
   RERANK_INPUT: num(process.env.RERANK_INPUT, 10), // shortlist fed to the reranker (tuned: 20→10 ~halves rerank latency)
   TOP_K: num(process.env.TOP_K, 6), // chunks kept for the prompt
   VECTOR_THRESHOLD: num(process.env.VECTOR_THRESHOLD, 0.3), // cosine-similarity floor
-  RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // reranker relevance floor
+  RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // per-chunk reranker relevance floor
+  // If the BEST reranked chunk scores below this, treat the whole query as
+  // out-of-scope and refuse rather than answer from irrelevant context.
+  RELEVANCE_FLOOR: num(process.env.RELEVANCE_FLOOR, 0.05),
   RRF_K: num(process.env.RRF_K, 60), // Reciprocal Rank Fusion constant
 
   // --- Server / deployment ---

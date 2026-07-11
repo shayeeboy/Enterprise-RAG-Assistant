@@ -1,0 +1,13 @@
+[
+  { "question": "How do I build finger independence?", "answerable": true, "keywords": ["independen"] },
+  { "question": "What should I do about a weak 4th finger?", "answerable": true, "keywords": ["4th finger", "fourth finger", "4th and 5th", "finger 4"] },
+  { "question": "How should I practice a difficult passage?", "answerable": true, "keywords": ["difficult", "passage"] },
+  { "question": "How do I memorize a piece of music?", "answerable": true, "keywords": ["memoriz"] },
+  { "question": "What is the best way to practice scales?", "answerable": true, "keywords": ["scale"] },
+  { "question": "How can I play faster without tensing up?", "answerable": true, "keywords": ["speed", "fast"] },
+  { "question": "How should a complete beginner start practicing?", "answerable": true, "keywords": ["beginner"] },
+  { "question": "What are parallel sets and how do I use them?", "answerable": true, "keywords": ["parallel"] },
+
+  { "question": "What is the capital of France?", "answerable": false, "keywords": [] },
+  { "question": "How do I bake sourdough bread at home?", "answerable": false, "keywords": [] }
+]

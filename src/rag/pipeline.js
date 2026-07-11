@@ -94,11 +94,15 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
     trace.error = "rerank: " + e.message;
     return { ok: false, stage: "rerank", answer: "Rerank failed: " + e.message, citations: [], meta: buildMeta(trace) };
   }
-  stage("rerank", { kept: top.length });
-  if (!top.length) {
+  const bestScore = top.length ? top[0].rerank || 0 : 0;
+  stage("rerank", { kept: top.length, bestScore: Number(bestScore.toFixed(3)) });
+  // Relevance guardrail: nothing scored above the confidence floor → the query
+  // is out of scope for this knowledge base; refuse instead of answering from
+  // irrelevant context.
+  if (!top.length || bestScore < cfg.RELEVANCE_FLOOR) {
     return {
       ok: true, grounded: false, answer: REFUSAL, citations: [], sources: [],
-      meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: 0 }),
+      meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length }),
     };
   }
 

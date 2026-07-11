@@ -53,3 +53,10 @@ jobs:
         if: steps.guard.outputs.run == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Retrieval-quality acceptance (Hit@5 / MRR). The refusal check needs an
+      # LLM and is skipped in CI; Hit@5 must still clear its target.
+      - run: npm run eval
+        if: steps.guard.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
