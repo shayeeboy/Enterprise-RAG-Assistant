@@ -15,7 +15,74 @@ alongside the [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native
 
 ---
 
-## Executive summary
+## Executive Summary
+
+**Problem.** Piano method books and exercise references (Chang's
+*Fundamentals of Piano Practice*, Hanon's *Virtuoso Pianist*) are long,
+unindexed, and don't map to how a learner actually asks questions — "what
+should I do about a weak 4th finger" doesn't correspond to any table of
+contents entry. This project builds a full RAG system to solve that
+retrieval problem end-to-end, deliberately architected the way an
+enterprise knowledge-base assistant would be: hybrid search, reranking,
+citations, guardrails, and production observability — not a toy demo. The
+piano corpus is the test case; the pattern (turn a large, domain-specific
+document set into a cited, guarded Q&A service) is the same shape as an
+internal enterprise KB over policy docs, runbooks, or onboarding material.
+
+**User.** Primary (as built): a self-directed piano learner asking
+practice and technique questions in natural language and getting a cited,
+grounded answer instead of a manual search through 200+ pages. Enterprise
+analogue: a new employee or support agent querying an internal knowledge
+base instead of keyword-searching a wiki — same retrieval and trust
+problem (does the answer cite the *right* source, and does the system
+know when to say "I don't know"), different corpus.
+
+**Success metric.** Two tiers, deliberately kept separate:
+- **System health (measured, live):** latency (p50/p95), token cost, and
+  "grounded rate" (does every answer carry a citation) — tracked per
+  request via built-in observability and persisted to a searchable Neon
+  table. Current numbers: 100% grounded, p50 latency ~16.9s / p95 ~23.7s,
+  $0 LLM cost (Groq free tier). **Honest caveat:** this is based on 3
+  logged queries so far — real signal on system behavior, not yet
+  statistically meaningful usage evidence.
+- **Retrieval quality (the metric that actually matters, not yet
+  measured):** "grounded" only confirms an answer *has* a citation, not
+  that it's the *right* passage. [[Recall@5 / Hit Rate@5 / MRR against a
+  held-out evaluation query set — see `eval/` once built]] is the metric
+  that would actually validate the system is retrieving correctly, and
+  it's the next planned addition, not a claimed result.
+
+**Key trade-off decisions.**
+- **Local embeddings + local reranker over hosted APIs, LLM kept
+  pluggable.** Embeddings (`mxbai-embed-large-v1` via Transformers.js) and
+  reranking (`bge-reranker-base`) run on-device — zero API cost, no key,
+  fully reproducible. The LLM stayed swappable (`LLM_PROVIDER` env var)
+  rather than also forced local, because observability data showed CPU
+  LLM inference was the actual bottleneck (~78% of a 252s request) — the
+  trade-off was resolved with a measured A/B, not a guess: switching to
+  Groq's free tier cut total latency ~252s → ~11s (~23×) at $0.
+- **Hybrid search (vector + keyword) fused with Reciprocal Rank Fusion,
+  not vector search alone.** Dense embeddings catch paraphrase; keyword
+  search catches exact terms that matter in this domain (finger numbers,
+  "Hanon"). RRF merges both rankings without needing to calibrate two
+  different score scales — cheaper than learning a fusion weight.
+- **Google Cloud Run over Hugging Face Docker Spaces or Render, decided by
+  actually hitting their limits.** HF Docker Spaces required a paid plan;
+  Render's free 512MB couldn't fit the models. Cloud Run's free tier runs
+  the Dockerfile unchanged at 1–4GiB — the decision came from testing
+  real constraints, not researching in the abstract.
+- **Guardrails that refuse over guardrails that hedge.** If nothing clears
+  the relevance threshold, the assistant declines rather than generating a
+  plausible-sounding but ungrounded answer. This is a deliberate trust
+  trade-off: fewer answered questions, in exchange for not silently
+  fabricating when the knowledge base doesn't cover something.
+- **Accepted, documented gap: Hanon's musical notation isn't retrievable.**
+  `pdftotext` can't extract staff notation, so exercises are findable by
+  their surrounding instructional text but not by note content. Kept
+  visible in the docs with a stated fix path (vision-model rasterization)
+  rather than quietly working around it.
+
+### How it works
 
 An enterprise-style RAG assistant that turns two piano-practice books into a
 cited, guarded question-answering service — engineered so every layer is free
