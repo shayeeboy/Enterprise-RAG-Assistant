@@ -32,7 +32,7 @@ module.exports = {
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
   HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 20), // pool size per search method
-  RERANK_INPUT: num(process.env.RERANK_INPUT, 20), // shortlist fed to the reranker
+  RERANK_INPUT: num(process.env.RERANK_INPUT, 10), // shortlist fed to the reranker (tuned: 20→10 ~halves rerank latency)
   TOP_K: num(process.env.TOP_K, 6), // chunks kept for the prompt
   VECTOR_THRESHOLD: num(process.env.VECTOR_THRESHOLD, 0.3), // cosine-similarity floor
   RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // reranker relevance floor

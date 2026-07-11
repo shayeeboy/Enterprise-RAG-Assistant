@@ -1,36 +1,61 @@
 # AI-Native Piano Learning Assistant — RAG Pipeline
 
-A retrieval-augmented generation (RAG) assistant over a piano-learning
-knowledge base, in two phases: an **offline ingestion pipeline** (Phase 1) that
-turns source PDFs into a queryable vector database, and a **query-time
-assistant** (Phase 2) that answers questions from that database with citations
-and guardrails. Every stage runs on free, local, open-source models — no paid
-API anywhere. Built as part of
-[My AI Portfolio](https://github.com/shayeeboy) alongside the
-[AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native-diagnostic).
+A retrieval-augmented generation (RAG) assistant over a piano-learning knowledge
+base, built in three phases: an **offline ingestion pipeline**, a **query-time
+assistant**, and **free off-localhost hosting with built-in observability**.
+Everything runs on free/local, open-source components by default; the only
+optional hosted piece (the LLM in Phase 3) uses a **free tier** — no paid API
+anywhere. Built as part of [My AI Portfolio](https://github.com/shayeeboy)
+alongside the [AI-Native Team Diagnostic](https://github.com/shayeeboy/ai-native-diagnostic).
+
+---
+
+## Executive summary
+
+An enterprise-style RAG assistant that turns two piano-practice books into a
+cited, guarded question-answering service — engineered so every layer is free
+and swappable.
+
+| Phase | What it does | Headline result |
+|---|---|---|
+| [**Phase 1 — Ingestion**](#phase-1-ingestion) | PDFs → parse → chunk → metadata → local embeddings → Neon pgvector | 985 chunks indexed, fully offline, no API key |
+| [**Phase 2 — Query-time assistant**](#phase-2-query-time-assistant) | 13-step RAG workflow: rewrite → hybrid search → rerank → LLM → citations → guardrails | grounded, cited answers; CLI + API + chat UI |
+| [**Phase 3 — Hosting & observability**](#phase-3-hosting-and-observability) | deploy-ready hardening, LLM moved to Groq free tier, per-request tracing | **~252 s → ~11 s** at **$0** (see below) |
 
 **Knowledge base (this build):**
+
 | Document | Author | Pages | Type |
 |---|---|---|---|
 | *Fundamentals of Piano Practice* | Chuan C. Chang | 202 | Method book (technique, practice methods, theory) |
 | *The Virtuoso Pianist, Part I* | C. L. Hanon | 21 | Exercise book (20 numbered finger exercises) |
 
-**Result of this run:** 985 chunks (940 + 45) indexed with metadata, ready for embedding and vector search.
+**Key outcomes**
+- **Free by default:** local embeddings + local reranker + Neon free tier; the LLM is either fully-local (Ollama) or Groq's free tier — $0 either way.
+- **Fast:** observability pinpointed CPU LLM inference as the bottleneck; moving to Groq and tuning the reranker cut a request from **~252 s to ~11 s (~23×)**.
+- **Grounded:** answers cite their sources by page; guardrails refuse when the knowledge base doesn't support an answer.
+- **Portable:** every stage is env-swappable (`EMBED_MODEL`, `RERANK_MODEL`, `LLM_PROVIDER`, …); no vendor lock-in.
+
+**Navigate:** [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
 
 ---
 
-## Pipeline
+## Phase 1: Ingestion
+
+Turns the source PDFs into a queryable vector database. Each stage is an
+isolated script in `scripts/`, so any stage can be swapped (a different
+embedding model, a different vector DB) without touching the others. Every stage
+but the last runs fully offline on this repo's contents — including embeddings,
+which use a local model with no API key. Only the final indexing stage needs
+network access, for the Neon Postgres database (a `DATABASE_URL`); no
+third-party API credentials are required at any stage.
+
+![Phase 1 ingestion pipeline](assets/phase1-ingestion.svg)
+
+**Workflow steps**
 
 ```
 Knowledge Base → Document Parsing → Chunking → Chunk Overlap → Embeddings → Metadata → Indexing → Vector Database
 ```
-
-Each stage is an isolated script in `scripts/`, so any stage can be swapped
-(a different embedding model, a different vector DB) without touching the
-others. Every stage but the last runs fully offline on this repo's contents —
-including embeddings, which use a local model with no API key. Only the final
-indexing stage needs network access, for the Neon Postgres database (a
-`DATABASE_URL`); no third-party API credentials are required at any stage.
 
 ### 1. Knowledge Base
 
@@ -141,9 +166,22 @@ Schema in `sql/schema.sql`:
   pre-filtering (e.g. "only exercises, only Hanon") ahead of vector search.
 - Generated `tsvector` column + GIN index for hybrid keyword+vector search.
 
----
+### Build it
 
-## Design decisions
+```bash
+npm install
+
+# offline stages — no network/API keys needed
+npm run offline    # parse → chunk (+overlap) → metadata
+
+# embeddings — local model, no API key (first run downloads the model)
+npm run embed      # optional: EMBED_MODEL=... to swap the model
+
+# indexing — needs a Postgres (Neon) connection string
+DATABASE_URL=postgres://... npm run index
+```
+
+### Design decisions
 
 - **Neon over self-hosted Postgres**: serverless scale-to-zero fits a
   portfolio/demo project's usage pattern (mirrors the same reasoning
@@ -170,18 +208,24 @@ Schema in `sql/schema.sql`:
   rasterize each exercise page and use a vision-capable model to describe
   the notation, or link out to the MuseScore/Mutopia source files.
 
+[↑ Back to top](#executive-summary)
+
 ---
 
-## The Assistant (query time — Phase 2)
+## Phase 2: Query-time assistant
 
 Phase 1 loads the vector DB; Phase 2 answers questions from it. The assistant
-runs the full retrieval-augmented workflow below, every stage on free/local
-tooling — the same local embedding model as ingestion, a local cross-encoder
-reranker, and a local LLM via Ollama. No stage calls a paid API.
+runs the full retrieval-augmented workflow below — the same local embedding
+model as ingestion, a local cross-encoder reranker, and a pluggable LLM
+(local Ollama by default; Groq in Phase 3). No stage requires a paid API.
+
+![Phase 2 query-time workflow](assets/phase2-query.svg)
+
+**Workflow steps**
 
 ```
 User Question
-   → Query Rewrite       local LLM expands/clarifies the query
+   → Query Rewrite       LLM expands/clarifies the query
    → Embedding           mxbai-embed-large-v1 (same model as ingestion)
    → Hybrid Search       pgvector cosine + Postgres full-text
    → Scoring             Reciprocal Rank Fusion of the two result sets
@@ -189,7 +233,7 @@ User Question
    → Reranking           bge-reranker-base cross-encoder scores each pair
    → Top-K Chunks        keep the best K for the prompt
    → Prompt Augmentation numbered, citable context blocks
-   → LLM Reasoning       local model answers from the context only
+   → LLM Reasoning       model answers from the context only
    → Generated Answer
    → Citations           map [n] markers back to title + page
    → Guardrails          input checks; refuse when unsupported; grounding check
@@ -200,14 +244,14 @@ User Question
 
 | Workflow step | Module | Free/local tool |
 |---|---|---|
-| Query Rewrite | `rewrite.js` | local LLM (Ollama) |
+| Query Rewrite | `rewrite.js` | LLM (Ollama or Groq) |
 | Embedding | `embed.js` | Transformers.js · `mxbai-embed-large-v1` |
 | Hybrid Search + Scoring + Threshold | `retrieve.js` | pgvector + Postgres FTS + RRF |
 | Reranking + Top-K | `rerank.js` | Transformers.js · `bge-reranker-base` |
 | Prompt Augmentation | `prompt.js` | — (string assembly) |
-| LLM Reasoning | `llm.js` | Ollama (pluggable) |
+| LLM Reasoning | `llm.js` | Ollama / OpenAI-compatible (pluggable) |
 | Citations + Guardrails | `guardrails.js` | rule-based |
-| Orchestration | `pipeline.js` | — |
+| Orchestration + observability | `pipeline.js`, `trace.js` | — |
 
 ### Why these tools (all free, no billing)
 
@@ -217,9 +261,9 @@ User Question
 - **Hybrid search via RRF**: dense vectors catch paraphrase, keyword search
   catches exact terms (finger numbers, "Hanon"); Reciprocal Rank Fusion merges
   the two rankings without calibrating their different score scales.
-- **Local LLM via Ollama**: keeps the assistant zero-cost and offline. The
-  provider is pluggable — set `LLM_PROVIDER=openai-compatible` + `LLM_BASE_URL`
-  to point at any hosted endpoint instead, without touching the pipeline.
+- **Pluggable LLM**: local via Ollama keeps it zero-cost and offline; set
+  `LLM_PROVIDER=openai-compatible` + `LLM_BASE_URL` to point at any hosted
+  endpoint (e.g. Groq's free tier — see Phase 3) without touching the pipeline.
 - **Guardrails**: if nothing clears the relevance threshold the assistant
   refuses rather than inventing an answer, and the generated answer is checked
   for real citations before it's returned.
@@ -232,6 +276,7 @@ cp .env.example .env           # set DATABASE_URL; the LLM defaults are free/loc
 
 # one-time: install the local LLM runner (https://ollama.com), then pull a model
 ollama pull llama3.2:3b        # small/fast default; llama3.1:8b for higher quality
+                               # (or use Groq's free tier — see Phase 3)
 
 # ask a question (CLI)
 npm run query -- "How should I practice a difficult passage?"
@@ -246,8 +291,12 @@ npm run smoke                  # checks DB, embeddings, retrieval, rerank, LLM
 
 The embedding and reranker models download once on first use (cached under
 `node_modules`). Retrieval and reranking are fully local; only the final answer
-needs the LLM. Tune `TOP_K`, `VECTOR_THRESHOLD`, `RERANK_THRESHOLD`, and
-`ENABLE_QUERY_REWRITE` in `.env`.
+needs the LLM. Tune `TOP_K`, `RERANK_INPUT`, `VECTOR_THRESHOLD`,
+`RERANK_THRESHOLD`, and `ENABLE_QUERY_REWRITE` in `.env`.
+
+> **Note:** the chat UI must be reached through the server (`npm run serve` →
+> `http://localhost:8080`), not by opening `public/index.html` as a file — a
+> relative `/ask` fetch needs an origin.
 
 ### Tests & CI
 
@@ -261,23 +310,79 @@ GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on every push.
 Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` in CI
 (the LLM step warns rather than fails there, since Ollama isn't available in CI).
 
-### Deploying off localhost (Phase 3)
+[↑ Back to top](#executive-summary)
 
-`server.js` is deploy-ready and env-driven for hosting the assistant behind a URL
-while keeping everything free — see [`docs/PHASE-3.md`](docs/PHASE-3.md) for the
-full analysis and hosting options. The knobs (all optional, default to open local
-dev): `ALLOWED_ORIGINS` (CORS), `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`,
-`ACCESS_CODE`, and — for a separately hosted front end — `window.RAG_API_BASE`.
-Because `llm.js` supports `LLM_PROVIDER=openai-compatible`, the LLM can move to a
-free-tier hosted endpoint (e.g. Groq) or stay fully self-hosted via Ollama.
-**Chosen path: Groq's free tier** — an env-only switch (no code change) that cut
-total request latency from **~252 s to ~22 s** (LLM stage ~183× faster) at **$0**,
-with higher answer quality. Full A/B in [`docs/PHASE-3.md`](docs/PHASE-3.md#decision-path-b-groq-free-tier-).
+---
 
-**Observability** is built in (no external SDK): every query returns a `meta`
-block with `traceId`, per-stage `latencyMs`, `tokens`, and `costUsd` (0 for local).
-The server logs one JSON line per request, the CLI prints a timing/token line, and
-the chat UI shows it under each answer. See [`docs/PHASE-3.md`](docs/PHASE-3.md#observability-built-in).
+## Phase 3: Hosting and observability
+
+Makes the assistant fast and deployable off localhost, and adds the
+instrumentation that made the performance problem measurable in the first place
+— all while staying free.
+
+![Phase 3 hosting and observability architecture](assets/phase3-hosting.svg)
+
+### Observability (built in)
+
+Every query is traced with no external SDK (dependency-free; the shape is
+OpenTelemetry-friendly for later export) — see `src/rag/trace.js`. Each request
+returns a `meta` block:
+
+| Signal | Field | Notes |
+|---|---|---|
+| **Tracing** | `meta.traceId` | correlates CLI output, server log, and API response |
+| **Latency** | `meta.latencyMs` | `{ total, rewrite, retrieve, rerank, llm }` (ms) |
+| **Errors** | `meta.error` | per-stage failure captured non-fatally |
+| **Tokens** | `meta.tokens` | `{ prompt, completion, total }` |
+| **Cost** | `meta.costUsd` | `0` for local/Groq-free; set `LLM_COST_*_PER_1K` for a metered provider |
+
+It surfaces in the **API** response, a **one-line JSON server log** per request,
+the **CLI** timing line, and a **chat-UI** meta line under each answer.
+
+### Decision: Path B — Groq free tier
+
+Observability showed the LLM stage was ~78% of a ~250 s request on CPU. The fix
+was to move the LLM to **Groq's free tier** — OpenAI-compatible, so it's an
+env-only switch through the existing provider, no code change:
+
+```
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=gsk_...            # free key from https://console.groq.com
+LLM_MODEL=llama-3.3-70b-versatile
+```
+
+**Measured A/B** (same question, retrieval unchanged), plus the reranker tuning
+(`RERANK_INPUT` 20 → 10):
+
+| Stage | Local `llama3.2:3b` (CPU) | Groq `llama-3.3-70b` | + tuned reranker |
+|---|---:|---:|---:|
+| LLM reasoning | 195,801 ms | 1,070 ms | ~0.8 s |
+| Query rewrite | 20,970 ms | 517 ms | ~0.5 s |
+| Rerank (local) | 25,890 ms | 14,642 ms | **6,292 ms** |
+| Retrieve (local) | 8,957 ms | 5,585 ms | ~3.3 s |
+| **Total** | **~252 s** | **~22 s** | **~11 s** |
+
+Net: **~23× faster** end-to-end, at **$0**, with higher answer quality (70B vs
+3B). Answer quality also improved a citation bug — the small model used to echo a
+literal `[n]`; the prompt was reworded to fix it. The three alternative hosting
+paths (Groq, Oracle Always-Free self-host, browser WebGPU) and full rationale
+are in [`docs/PHASE-3.md`](docs/PHASE-3.md).
+
+### Deploy-ready hardening
+
+`server.js` is env-driven for hosting the assistant behind a URL. All knobs are
+optional and default to open local dev:
+
+- `ALLOWED_ORIGINS` — CORS allowlist (set to your front-end origin in production)
+- `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` — per-IP rate limiting
+- `ACCESS_CODE` — optional shared secret to gate `/ask`
+- `window.RAG_API_BASE` / `window.RAG_ACCESS_CODE` — let a separately hosted
+  (e.g. GitHub Pages) front end call the backend on another origin
+
+See [`docs/PHASE-3.md`](docs/PHASE-3.md) for the deployment plan per path.
+
+[↑ Back to top](#executive-summary)
 
 ---
 
@@ -287,50 +392,33 @@ the chat UI shows it under each answer. See [`docs/PHASE-3.md`](docs/PHASE-3.md#
 rag-pipeline/
 ├── README.md                  ← this file
 ├── package.json
+├── assets/                    ← phase architecture diagrams (SVG)
+├── docs/PHASE-3.md            ← hosting analysis, A/B results, observability
 ├── data/
 │   ├── raw/                   ← pdftotext output (gitignored — regenerate from PDFs)
 │   ├── parsed/                ← stage 2 output
 │   └── chunks/                ← stage 3/4/6 output (chunks, enriched, embedded)
 ├── scripts/
-│   ├── 01_parse.js
-│   ├── 02_chunk.js
-│   ├── 03_metadata.js
+│   ├── 01_parse.js  02_chunk.js  03_metadata.js
 │   ├── 04_embed.js            ← local embeddings (Transformers.js, no API key)
 │   ├── 05_index.js            ← requires DATABASE_URL
-│   └── 06_query.js            ← Phase 2: ask a question from the CLI
+│   ├── 06_query.js            ← Phase 2: ask a question from the CLI
+│   ├── check.js               ← offline wiring/logic checks (npm run check)
+│   └── smoke.js               ← full DB+models+LLM health check (npm run smoke)
 ├── src/rag/                   ← Phase 2 query library (one module per stage)
 │   ├── pipeline.js            ← orchestrates the full workflow
 │   ├── rewrite.js  embed.js  retrieve.js  rerank.js
-│   ├── prompt.js   llm.js     guardrails.js
+│   ├── prompt.js   llm.js     guardrails.js  trace.js
 │   ├── db.js                  ← pooled Neon connection
 │   └── config.js              ← env-driven, free/local defaults
-├── server.js                 ← local API + chat UI (POST /ask, GET /health)
-├── public/index.html         ← minimal chat front end
+├── server.js                 ← API + chat UI (CORS, rate limit, access code)
+├── public/index.html         ← minimal chat front end (RAG_API_BASE aware)
 ├── .env.example
-└── sql/
-    └── schema.sql
+├── .github/workflows/ci.yml
+└── sql/schema.sql
 ```
 
-## Running it
-
-```bash
-npm install
-
-# offline stages — no network/API keys needed
-npm run offline    # parse → chunk (+overlap) → metadata
-
-# embeddings — local model, no API key (first run downloads the model)
-npm run embed      # optional: EMBED_MODEL=... to swap the model
-
-# indexing — needs a Postgres (Neon) connection string
-DATABASE_URL=postgres://... npm run index
-```
-
-Phase 2 (querying the loaded DB) is covered in
-[The Assistant](#the-assistant-query-time--phase-2) above — `npm run query` for
-the CLI or `npm run serve` for the local API + chat UI.
-
-## Tools & services
+## Tools and services
 
 | Layer | Tool/Service | Why |
 |---|---|---|
@@ -342,9 +430,10 @@ the CLI or `npm run serve` for the local API + chat UI.
 | DB indexing | HNSW (pgvector) | Better recall/speed for this KB size, incremental build |
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |
 | Hybrid search | pgvector cosine + Postgres full-text, fused with RRF | Combines semantic + keyword recall, no extra service |
-| Reranking (Phase 2) | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
+| Reranking | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
 | LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`llama-3.3-70b-versatile`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER` |
-| Query API + UI (Phase 2) | Express + static chat page (`server.js`, `public/`) | Runs locally since the LLM is local; same Node stack as the rest |
+| API + UI | Express + static chat page (`server.js`, `public/`) | CORS/rate-limit/access-code hardened; same Node stack throughout |
+| Observability | in-house trace (`trace.js`) | Per-request latency/tokens/cost, no external SDK |
 
 ## Lessons learned
 
@@ -367,12 +456,14 @@ resolved them.
 | Small model echoed the literal `[n]` from a `"cite as [n]"` prompt | Removed the placeholder from the prompt and strip a stray leading `[n]`; don't put literal tokens a model will parrot. |
 | `llama3.2:3b` sometimes answered without citations | The grounding guardrail flags ungrounded answers; guardrails must assume the model won't always comply (larger models cite more reliably). |
 
-**Phase 3 — Hosting prep & observability**
+**Phase 3 — Hosting & observability**
 
 | Issue | Resolution / lesson |
 |---|---|
 | `Failed to parse URL from /ask` | The page was opened as a file (no origin for a relative fetch). It must be served (`npm run serve`); added a UI guard and a configurable `RAG_API_BASE` for split hosting. |
 | CORS/rate-limit "not working" during testing | Stale background `node` servers were holding the port and serving old code. Kill dev servers between runs; a startup config log line now makes the running instance self-identify. |
 | Assistant felt very slow | **Observability made it measurable:** the LLM stage is ~78% of a ~250 s request on CPU. Conclusion is now data-driven — local CPU inference is the bottleneck; a fast free-tier hosted LLM (e.g. Groq) or a GPU is the real fix, not retrieval tuning. |
-| Applied the fix (Path B) | Switched the LLM to **Groq's free tier** via the existing `openai-compatible` provider — env-only, no code change. Total latency **~252 s → ~22 s** at $0, with better answers. The trace then showed the new bottleneck is the local reranker (~15 s). |
+| Applied the fix (Path B) | Switched the LLM to **Groq's free tier** via the existing `openai-compatible` provider — env-only, no code change. With a reranker tune (`RERANK_INPUT` 20→10) total latency went **~252 s → ~11 s** at $0, with better answers. |
 | Neon connection string exposed in chat | Rotated each time and verified the old credential was dead; the real value lives only in the gitignored `.env`. |
+
+[↑ Back to top](#executive-summary)

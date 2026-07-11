@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 880" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8A5A2B"/></marker>
+  </defs>
+  <rect x="1" y="1" width="618" height="878" rx="14" fill="#F7F4EF" stroke="#DED7CB"/>
+  <text x="24" y="34" font-size="15" font-weight="700" fill="#8A5A2B">Phase 2 — Query-time assistant</text>
+  <text x="24" y="52" font-size="10.5" fill="#6B655C">13-step retrieval-augmented workflow, one module per stage (src/rag/)</text>
+
+  <!-- pipeline nodes -->
+  <g font-size="12">
+    <!-- 1 -->
+    <rect x="150" y="70" width="300" height="50" rx="9" fill="#EBDCC8" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="91" text-anchor="middle" font-weight="700" fill="#12100E">User Question</text>
+    <text x="300" y="107" text-anchor="middle" font-size="9.5" fill="#6B655C">input guardrail: length / sanity checks</text>
+    <line x1="300" y1="120" x2="300" y2="136" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 2 -->
+    <rect x="150" y="136" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="157" text-anchor="middle" font-weight="700" fill="#12100E">Query Rewrite</text>
+    <text x="300" y="173" text-anchor="middle" font-size="9.5" fill="#6B655C">LLM expands / clarifies the search query</text>
+    <line x1="300" y1="186" x2="300" y2="202" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 3 -->
+    <rect x="150" y="202" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="223" text-anchor="middle" font-weight="700" fill="#12100E">Embedding</text>
+    <text x="300" y="239" text-anchor="middle" font-size="9.5" fill="#6B655C">mxbai-large (local) — same model as ingestion</text>
+    <line x1="300" y1="252" x2="300" y2="268" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 4 -->
+    <rect x="150" y="268" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="289" text-anchor="middle" font-weight="700" fill="#12100E">Hybrid Search</text>
+    <text x="300" y="305" text-anchor="middle" font-size="9.5" fill="#6B655C">pgvector cosine  +  Postgres full-text</text>
+    <line x1="300" y1="318" x2="300" y2="334" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 5 -->
+    <rect x="150" y="334" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="355" text-anchor="middle" font-weight="700" fill="#12100E">Scoring + Threshold</text>
+    <text x="300" y="371" text-anchor="middle" font-size="9.5" fill="#6B655C">Reciprocal Rank Fusion, drop low-relevance</text>
+    <line x1="300" y1="384" x2="300" y2="400" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 6 -->
+    <rect x="150" y="400" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="421" text-anchor="middle" font-weight="700" fill="#12100E">Reranking → Top-K</text>
+    <text x="300" y="437" text-anchor="middle" font-size="9.5" fill="#6B655C">bge cross-encoder (local), keep best K</text>
+    <line x1="300" y1="450" x2="300" y2="466" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 7 -->
+    <rect x="150" y="466" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="487" text-anchor="middle" font-weight="700" fill="#12100E">Prompt Augmentation</text>
+    <text x="300" y="503" text-anchor="middle" font-size="9.5" fill="#6B655C">numbered, citable context blocks</text>
+    <line x1="300" y1="516" x2="300" y2="532" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 8 -->
+    <rect x="150" y="532" width="300" height="50" rx="9" fill="#EBDCC8" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="553" text-anchor="middle" font-weight="700" fill="#12100E">LLM Reasoning</text>
+    <text x="300" y="569" text-anchor="middle" font-size="9.5" fill="#6B655C">Groq (Phase 3) or local Ollama — answers from context</text>
+    <line x1="300" y1="582" x2="300" y2="598" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 9 -->
+    <rect x="150" y="598" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="619" text-anchor="middle" font-weight="700" fill="#12100E">Generated Answer + Citations</text>
+    <text x="300" y="635" text-anchor="middle" font-size="9.5" fill="#6B655C">map [n] markers → title + page</text>
+    <line x1="300" y1="648" x2="300" y2="664" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 10 -->
+    <rect x="150" y="664" width="300" height="50" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="685" text-anchor="middle" font-weight="700" fill="#12100E">Guardrails</text>
+    <text x="300" y="701" text-anchor="middle" font-size="9.5" fill="#6B655C">refuse if unsupported · grounding check</text>
+    <line x1="300" y1="714" x2="300" y2="730" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a2)"/>
+    <!-- 11 -->
+    <rect x="150" y="730" width="300" height="50" rx="9" fill="#EBDCC8" stroke="#8A5A2B" stroke-width="1.5"/>
+    <text x="300" y="751" text-anchor="middle" font-weight="700" fill="#12100E">Response</text>
+    <text x="300" y="767" text-anchor="middle" font-size="9.5" fill="#6B655C">answer + citations + observability meta</text>
+  </g>
+
+  <!-- observability annotation -->
+  <line x1="470" y1="95" x2="470" y2="755" stroke="#8A5A2B" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="482" y="400" font-size="10" font-weight="700" fill="#8A5A2B" transform="rotate(90 482 400)">Observability</text>
+  <text x="498" y="400" font-size="9" fill="#6B655C" transform="rotate(90 498 400)">every stage timed → traceId · latency · tokens · cost</text>
+
+  <!-- legend -->
+  <rect x="24" y="806" width="14" height="14" rx="3" fill="#EBDCC8" stroke="#8A5A2B"/>
+  <text x="44" y="817" font-size="9.5" fill="#6B655C">endpoints / LLM calls</text>
+  <rect x="180" y="806" width="14" height="14" rx="3" fill="#FCFAF6" stroke="#8A5A2B"/>
+  <text x="200" y="817" font-size="9.5" fill="#6B655C">local, free retrieval / ranking stages</text>
+</svg>
