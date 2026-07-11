@@ -23,7 +23,12 @@ async function chatOllama(messages) {
     throw new Error(`Ollama error ${res.status}: ${body || res.statusText}`);
   }
   const data = await res.json();
-  return (data.message?.content || "").trim();
+  const prompt = data.prompt_eval_count || 0;
+  const completion = data.eval_count || 0;
+  return {
+    content: (data.message?.content || "").trim(),
+    usage: { prompt, completion, total: prompt + completion },
+  };
 }
 
 async function chatOpenAICompatible(messages) {
@@ -41,7 +46,13 @@ async function chatOpenAICompatible(messages) {
     throw new Error(`LLM error ${res.status}: ${body || res.statusText}`);
   }
   const data = await res.json();
-  return (data.choices?.[0]?.message?.content || "").trim();
+  const u = data.usage || {};
+  const prompt = u.prompt_tokens || 0;
+  const completion = u.completion_tokens || 0;
+  return {
+    content: (data.choices?.[0]?.message?.content || "").trim(),
+    usage: { prompt, completion, total: u.total_tokens || prompt + completion },
+  };
 }
 
 async function chat(messages) {

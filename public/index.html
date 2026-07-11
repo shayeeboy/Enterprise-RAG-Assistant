@@ -103,7 +103,19 @@
         return `[${c.n}] ${esc(c.title)} — ${p} (${esc(c.content_type||'general')})`;
       }).join('<br>') + '</div>';
     }
-    const meta = res.meta ? `<div class="meta">${res.grounded===false?'⚠ ungrounded · ':''}model: ${esc(res.meta.model||'')} · retrieved ${res.meta.retrieved} · reranked ${res.meta.reranked||0}</div>` : '';
+    let meta = '';
+    if(res.meta){
+      const m = res.meta, L = m.latencyMs || {};
+      const parts = [
+        (res.grounded===false ? '⚠ ungrounded' : null),
+        'model: ' + esc(m.model||''),
+        (L.total!=null ? L.total+'ms' : null),
+        (m.tokens?.total ? m.tokens.total+' tok' : null),
+        (m.costUsd ? '$'+m.costUsd : null),
+        (m.traceId ? 'trace '+esc(m.traceId) : null),
+      ].filter(Boolean);
+      meta = '<div class="meta">' + parts.join(' · ') + '</div>';
+    }
     log.appendChild(el('msg', `<div class="role">Assistant</div><div class="body">${esc(res.answer)}</div>${cites}${meta}`));
     window.scrollTo(0, document.body.scrollHeight);
   }

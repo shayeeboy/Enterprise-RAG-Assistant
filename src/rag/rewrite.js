@@ -15,13 +15,13 @@ Output ONLY the rewritten query as plain text — no quotes, no preamble, one li
 async function rewriteQuery(question) {
   if (!cfg.ENABLE_QUERY_REWRITE) return { query: question, rewritten: false };
   try {
-    const out = await chat([
+    const { content, usage } = await chat([
       { role: "system", content: SYSTEM },
       { role: "user", content: question },
     ]);
-    const q = (out || "").split("\n")[0].replace(/^["']|["']$/g, "").trim();
-    if (!q || q.length < 3) return { query: question, rewritten: false };
-    return { query: q, rewritten: q.toLowerCase() !== question.toLowerCase() };
+    const q = (content || "").split("\n")[0].replace(/^["']|["']$/g, "").trim();
+    if (!q || q.length < 3) return { query: question, rewritten: false, usage };
+    return { query: q, rewritten: q.toLowerCase() !== question.toLowerCase(), usage };
   } catch (e) {
     // Non-fatal: retrieval proceeds with the original question.
     return { query: question, rewritten: false, error: e.message };

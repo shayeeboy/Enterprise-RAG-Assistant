@@ -66,6 +66,35 @@ Implemented in `server.js` and `public/index.html`, all env-driven:
   backend on a different origin (empty = same origin, i.e. `npm run serve`).
 - **Proxy-aware IPs** — `trust proxy` so rate limiting works behind a host's proxy.
 
+## Observability (built in)
+
+Every query is traced with no external SDK (dependency-free; shape is
+OpenTelemetry-friendly for later export). See `src/rag/trace.js`.
+
+Captured per request and returned in the API response `meta`:
+
+| Signal | Field | Notes |
+|---|---|---|
+| **Tracing** | `meta.traceId` | short id correlating CLI output, server log, and API response |
+| **Latency** | `meta.latencyMs` | `{ total, rewrite, retrieve, rerank, llm }` (ms); `retrieve` includes query embedding + hybrid search |
+| **Errors** | `meta.error` | per-stage failure captured non-fatally (e.g. `llm: fetch failed`) |
+| **Tokens** | `meta.tokens` | `{ prompt, completion, total }` from Ollama (`prompt_eval_count`/`eval_count`) or an OpenAI-compatible `usage` block |
+| **Cost** | `meta.costUsd` | `0` for local/Ollama; set `LLM_COST_PROMPT_PER_1K` / `LLM_COST_COMPLETION_PER_1K` for a metered provider |
+
+Where it surfaces:
+- **API:** included in every `/ask` JSON response under `meta`.
+- **Server log:** one structured JSON line per request (`traceId`, `ms`, `stages`, `tokens`, `costUsd`, `grounded`, `model`, `error`) — greppable / shippable to any log drain.
+- **CLI:** `npm run query` prints a latency + tokens + cost + trace line; `VERBOSE=1` adds per-stage events.
+- **Chat UI:** a small meta line under each answer (model · latency · tokens · cost · trace).
+
+This makes the current pain visible: on CPU, the **`llm` stage dominates** total
+latency. Levers: a smaller/faster local model, a GPU box (Path A), or a fast
+free-tier hosted endpoint like Groq (Path B) — the trace lets you compare them
+apples-to-apples before committing.
+
+For a hosted dashboard later, the trace can be exported to a free tier of
+Grafana Cloud / Honeycomb / SigNoz, or simply parsed from the JSON server logs.
+
 ## Remaining per-path work (when a path is chosen)
 - **Path A:** provision the VM; install Node + Ollama; pull the model; run the
   backend as a service; TLS via Cloudflare Tunnel; set `ALLOWED_ORIGINS`.

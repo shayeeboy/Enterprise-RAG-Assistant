@@ -271,6 +271,11 @@ dev): `ALLOWED_ORIGINS` (CORS), `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`,
 Because `llm.js` supports `LLM_PROVIDER=openai-compatible`, the LLM can move to a
 free-tier hosted endpoint (e.g. Groq) or stay fully self-hosted via Ollama.
 
+**Observability** is built in (no external SDK): every query returns a `meta`
+block with `traceId`, per-stage `latencyMs`, `tokens`, and `costUsd` (0 for local).
+The server logs one JSON line per request, the CLI prints a timing/token line, and
+the chat UI shows it under each answer. See [`docs/PHASE-3.md`](docs/PHASE-3.md#observability-built-in).
+
 ---
 
 ## Repo structure

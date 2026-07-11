@@ -44,7 +44,16 @@ async function main() {
       console.log(`  [${c.n}] ${c.title} — ${pages} (${c.content_type || "general"})`);
     });
   }
-  if (res.meta) console.error("\nmeta:", JSON.stringify(res.meta));
+  if (res.meta) {
+    const m = res.meta;
+    const L = m.latencyMs || {};
+    console.error(
+      `\n⏱  ${L.total}ms total  (rewrite ${L.rewrite || 0} · retrieve ${L.retrieve || 0} · rerank ${L.rerank || 0} · llm ${L.llm || 0})`
+    );
+    console.error(
+      `🔢 tokens ${m.tokens?.total || 0} (prompt ${m.tokens?.prompt || 0} / completion ${m.tokens?.completion || 0}) · cost $${m.costUsd} · trace ${m.traceId}${m.error ? " · error: " + m.error : ""}`
+    );
+  }
 
   await close();
 }

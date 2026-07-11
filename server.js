@@ -86,6 +86,21 @@ app.post("/ask", rateLimit, accessGate, async (req, res) => {
   const question = (req.body && req.body.question) || "";
   try {
     const result = await answerQuestion(question);
+    // Structured observability line — one JSON object per request.
+    const m = result.meta || {};
+    console.log(
+      JSON.stringify({
+        t: new Date().toISOString(),
+        traceId: m.traceId,
+        ms: m.latencyMs?.total,
+        stages: m.latencyMs,
+        tokens: m.tokens?.total,
+        costUsd: m.costUsd,
+        grounded: result.grounded,
+        model: m.model,
+        error: m.error || null,
+      })
+    );
     res.json(result);
   } catch (e) {
     console.error("ask failed:", e.message);

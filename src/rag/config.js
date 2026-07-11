@@ -24,6 +24,10 @@ module.exports = {
   LLM_BASE_URL: process.env.LLM_BASE_URL || "", // for any OpenAI-compatible endpoint
   LLM_API_KEY: process.env.LLM_API_KEY || "",
   LLM_TEMPERATURE: num(process.env.LLM_TEMPERATURE, 0.2),
+  // Cost estimation (per 1K tokens). 0 = free/local (Ollama). Set these only if
+  // you point at a metered provider, so the trace can report $ per request.
+  LLM_COST_PROMPT_PER_1K: num(process.env.LLM_COST_PROMPT_PER_1K, 0),
+  LLM_COST_COMPLETION_PER_1K: num(process.env.LLM_COST_COMPLETION_PER_1K, 0),
 
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
