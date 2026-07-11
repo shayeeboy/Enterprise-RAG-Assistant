@@ -5,7 +5,7 @@ name: Refresh observability stats
 # and on demand. Requires a DATABASE_URL repository secret; skips cleanly if unset.
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 permissions:
