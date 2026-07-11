@@ -380,7 +380,11 @@ optional and default to open local dev:
 - `window.RAG_API_BASE` / `window.RAG_ACCESS_CODE` — let a separately hosted
   (e.g. GitHub Pages) front end call the backend on another origin
 
-See [`docs/PHASE-3.md`](docs/PHASE-3.md) for the deployment plan per path.
+**Deployment:** the frontend auto-publishes to GitHub Pages
+(`.github/workflows/pages.yml`) and takes the backend URL as a `?api=` query
+param; the backend ships with a `Dockerfile` for any container host. Step-by-step
+(Hugging Face Spaces / Render / Oracle) is in [`docs/DEPLOY.md`](docs/DEPLOY.md);
+the hosting analysis per path is in [`docs/PHASE-3.md`](docs/PHASE-3.md).
 
 [↑ Back to top](#executive-summary)
 

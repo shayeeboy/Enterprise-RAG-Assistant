@@ -80,8 +80,12 @@
   // these before this script runs, e.g. in a small inline <script> or via a
   // build step:  window.RAG_API_BASE = 'https://your-backend'; window.RAG_ACCESS_CODE = '...';
   // Left empty, the app calls its own origin (how `npm run serve` works locally).
-  const API_BASE = (window.RAG_API_BASE || '').replace(/\/$/, '');
-  const ACCESS_CODE = window.RAG_ACCESS_CODE || '';
+  // API base resolution order: ?api= URL param → window.RAG_API_BASE → same origin.
+  // Lets the GitHub Pages build point at any backend without editing files, e.g.
+  //   https://<user>.github.io/<repo>/?api=https://my-backend&code=SECRET
+  const _params = new URLSearchParams(location.search);
+  const API_BASE = (_params.get('api') || window.RAG_API_BASE || '').replace(/\/$/, '');
+  const ACCESS_CODE = _params.get('code') || window.RAG_ACCESS_CODE || '';
 
   const log = document.getElementById('log');
   const form = document.getElementById('form');
