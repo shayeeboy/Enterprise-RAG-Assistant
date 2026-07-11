@@ -32,6 +32,15 @@ base instead of keyword-searching a wiki — same retrieval and trust
 problem (does the answer cite the *right* source, and does the system
 know when to say "I don't know"), different corpus.
 
+**Objective.** Build a production-shaped RAG architecture — hybrid
+retrieval, reranking, cited generation, and refusal guardrails — on a real,
+non-trivial corpus, with the discipline of a system built to be trusted,
+not just demoed. The piano knowledge base is the test bed; the actual
+objective is showing the pattern works end-to-end: ingest a real
+document set, retrieve accurately, generate only from what's retrieved,
+and know when to say "I don't know." That pattern is what would transfer
+to an enterprise KB, not the piano content itself.
+
 **Success metric.** Two tiers, deliberately kept separate:
 - **System health (measured, live):** latency (p50/p95), token cost, and
   "grounded rate" (does every answer carry a citation) — tracked per
