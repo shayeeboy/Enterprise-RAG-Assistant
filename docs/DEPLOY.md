@@ -32,20 +32,21 @@ The backend loads the embedding + reranker models in memory (~1 GB peak), so
 
 ### Recommended: Hugging Face Spaces (Docker) — 16 GB RAM free
 
-1. Create a **new Space** → SDK: **Docker** → **Blank**.
-2. Push this repo's contents (it has a `Dockerfile`). In the Space's
-   `README.md` frontmatter set `app_port: 7860`.
+A thin Space that pulls the app from GitHub keeps one source of truth. The two
+files to put in the Space are ready in [`deploy/huggingface/`](../deploy/huggingface/).
+
+1. Create a **new Space** → SDK: **Docker** → **Blank** → CPU basic (free).
+2. Add the two files from `deploy/huggingface/` to the Space repo:
+   - `README.md` (has the required `sdk: docker` / `app_port: 8080` frontmatter)
+   - `Dockerfile` (clones this GitHub repo and runs `server.js`)
 3. **Settings → Variables and secrets** → add:
-   - `PORT=7860`
    - `DATABASE_URL` = your Neon string *(secret)*
-   - `LLM_PROVIDER=openai-compatible`
-   - `LLM_BASE_URL=https://api.groq.com/openai/v1`
    - `LLM_API_KEY` = your Groq key *(secret)*
-   - `LLM_MODEL=llama-3.3-70b-versatile`
+   - `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=llama-3.3-70b-versatile`
    - `ALLOWED_ORIGINS=https://shayeeboy.github.io`
-   - *(optional)* `ACCESS_CODE=<something>`
-4. The Space builds the Docker image and serves at
-   `https://<user>-<space>.hf.space`. Use that as `?api=` above.
+   - *(optional)* `ACCESS_CODE=<something>` *(secret)*
+4. The Space builds and serves at `https://<user>-<space>.hf.space`. Use that as
+   the `?api=` value. Rebuild against latest code via **Factory rebuild**.
 
 ### Alternative: Render — simplest, but 512 MB free RAM is tight
 
