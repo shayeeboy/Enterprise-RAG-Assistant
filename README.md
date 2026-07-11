@@ -270,6 +270,9 @@ dev): `ALLOWED_ORIGINS` (CORS), `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`,
 `ACCESS_CODE`, and — for a separately hosted front end — `window.RAG_API_BASE`.
 Because `llm.js` supports `LLM_PROVIDER=openai-compatible`, the LLM can move to a
 free-tier hosted endpoint (e.g. Groq) or stay fully self-hosted via Ollama.
+**Chosen path: Groq's free tier** — an env-only switch (no code change) that cut
+total request latency from **~252 s to ~22 s** (LLM stage ~183× faster) at **$0**,
+with higher answer quality. Full A/B in [`docs/PHASE-3.md`](docs/PHASE-3.md#decision-path-b-groq-free-tier-).
 
 **Observability** is built in (no external SDK): every query returns a `meta`
 block with `traceId`, per-stage `latencyMs`, `tokens`, and `costUsd` (0 for local).
@@ -340,7 +343,7 @@ the CLI or `npm run serve` for the local API + chat UI.
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |
 | Hybrid search | pgvector cosine + Postgres full-text, fused with RRF | Combines semantic + keyword recall, no extra service |
 | Reranking (Phase 2) | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
-| LLM reasoning (Phase 2) | **Ollama** (local, default `llama3.2:3b`; `llama3.1:8b` for higher quality), provider-pluggable | Zero-cost, offline; swap to any OpenAI-compatible endpoint via env |
+| LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`llama-3.3-70b-versatile`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER` |
 | Query API + UI (Phase 2) | Express + static chat page (`server.js`, `public/`) | Runs locally since the LLM is local; same Node stack as the rest |
 
 ## Lessons learned
@@ -371,4 +374,5 @@ resolved them.
 | `Failed to parse URL from /ask` | The page was opened as a file (no origin for a relative fetch). It must be served (`npm run serve`); added a UI guard and a configurable `RAG_API_BASE` for split hosting. |
 | CORS/rate-limit "not working" during testing | Stale background `node` servers were holding the port and serving old code. Kill dev servers between runs; a startup config log line now makes the running instance self-identify. |
 | Assistant felt very slow | **Observability made it measurable:** the LLM stage is ~78% of a ~250 s request on CPU. Conclusion is now data-driven — local CPU inference is the bottleneck; a fast free-tier hosted LLM (e.g. Groq) or a GPU is the real fix, not retrieval tuning. |
+| Applied the fix (Path B) | Switched the LLM to **Groq's free tier** via the existing `openai-compatible` provider — env-only, no code change. Total latency **~252 s → ~22 s** at $0, with better answers. The trace then showed the new bottleneck is the local reranker (~15 s). |
 | Neon connection string exposed in chat | Rotated each time and verified the old credential was dead; the real value lives only in the gitignored `.env`. |

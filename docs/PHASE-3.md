@@ -54,6 +54,37 @@ retrieval + rerank.
 - **Least effort, OK with a free-tier API →** Path B with Groq (code already
   supports it), plus a smaller-model re-embed if the host is RAM-constrained.
 
+## Decision: Path B (Groq free tier) ✅
+
+Chosen to address the Phase 2 performance finding (CPU LLM inference dominated
+latency). Groq is OpenAI-compatible, so the switch is env-only — no code change:
+
+```
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=gsk_...            # free key from https://console.groq.com
+LLM_MODEL=llama-3.3-70b-versatile
+```
+
+**Measured A/B on the same question** ("How do I build finger independence?"),
+retrieval identical, only the LLM provider changed:
+
+| Stage | Local `llama3.2:3b` (CPU) | Groq `llama-3.3-70b` | Speedup |
+|---|---:|---:|---:|
+| LLM reasoning | 195,801 ms | 1,070 ms | ~183× |
+| Query rewrite (an LLM call) | 20,970 ms | 517 ms | ~40× |
+| Rerank (local, unchanged) | 25,890 ms | 14,642 ms | — |
+| Retrieve (local, unchanged) | 8,957 ms | 5,585 ms | — |
+| **Total** | **~252 s** | **~22 s** | **~11.5×** |
+
+Answer quality also improved (70B vs 3B): more complete, more citations. Cost
+stays **$0** on Groq's free tier.
+
+**New bottleneck → next optimization:** with the LLM fast, the local
+cross-encoder **rerank (~15 s)** is now the largest stage. Options: lower
+`RERANK_INPUT` (20→10), a smaller reranker, or a hosted rerank — all measurable
+via the same trace.
+
 ## Shared prep (done — deploy-ready regardless of path)
 Implemented in `server.js` and `public/index.html`, all env-driven:
 
