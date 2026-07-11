@@ -1,4 +1,4 @@
-# AI-Native Piano Learning Assistant — RAG Pipeline
+# AI-Native Piano Learning RAG Assistant
 
 A retrieval-augmented generation (RAG) assistant over a piano-learning knowledge
 base, built in three phases: an **offline ingestion pipeline**, a **query-time
@@ -448,7 +448,7 @@ per-path analysis is in [`docs/PHASE-3.md`](docs/PHASE-3.md).
 ## Repo structure
 
 ```
-rag-pipeline/
+Enterprise-RAG-Assistant/
 ├── README.md                  ← this file
 ├── package.json
 ├── assets/                    ← phase architecture diagrams (SVG)
