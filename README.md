@@ -644,11 +644,11 @@ Out-of-scope questions are checked separately for correct **refusal**.
 Generator `llama-3.3-70b-versatile`, judge `openai/gpt-oss-120b` (temp 0),
 over 12 answerable + 2 out-of-scope questions:
 
-| Metric | Result | Aspirational goal | Met? |
+| Metric | Result | Near-term goal | Met? |
 |---|---|---|---|
-| Faithfulness (no hallucination) | **75%** (hallucination 25%) | ≥ 80% | ✗ in progress |
-| Mean answer correctness | **3.08 / 5** | ≥ 3.5 | ✗ in progress |
-| Semantic Hit@5 | **83%** (10/12) | ≥ 80% | ✓ |
+| Faithfulness (no hallucination) | **75%** (hallucination 25%) | ≥ 85% | ✗ in progress |
+| Mean answer correctness | **3.08 / 5** | ≥ 3.6 | ✗ in progress |
+| Semantic Hit@5 | **83%** (10/12) | ≥ 90% | ✗ in progress |
 | Out-of-scope refusal | **100%** (2/2) | 100% | ✓ |
 
 The judge **surfaced real problems the keyword eval hid** — that is the point.
@@ -658,6 +658,24 @@ tightening the generation prompt moved faithfulness **67% → 75%** and correctn
 **2.67 → 3.08** while holding out-of-scope refusal at 100% (see *Lessons
 learned*). CI gates on **regression floors** set below this baseline, so the
 build stays green at current quality and only a real regression fails it.
+
+### Improvement roadmap
+
+The goals above are a roadmap, not a claim. Below is where each metric stands
+now, the next milestone and stretch target, and the concrete work to get there —
+most of it directly motivated by what the judge's reasoning traces flagged.
+
+| Metric | Current | Near-term | Stretch | How to get there |
+|---|---|---|---|---|
+| Faithfulness (no hallucination) | 75% | ≥ 85% | ≥ 95% | Generate at **temperature 0** in production; add a post-generation per-sentence **entailment/citation check** that trims any claim no source supports; harden the grounding prompt ("state only what a source explicitly says — never infer"); raise the rerank threshold so marginal chunks don't tempt the model. |
+| Answer correctness (0–5) | 3.08 | ≥ 3.6 | ≥ 4.2 | Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
+| Semantic Hit@5 | 83% | ≥ 90% | ≥ 95% | **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
+| Out-of-scope refusal | 100% | 100% (hold) | 100% (hold) | Keep the **hard-100% CI floor**; grow the out-of-scope set with **adversarial near-misses** (piano-adjacent but uncovered) so a future prompt change can't silently regress it. |
+| Eval confidence | 14 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | Grow the golden set; report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
+
+**Enabler:** larger, repeated eval runs need headroom beyond the Groq free
+tier's 100k-tokens/day cap — either a paid dev tier or a **local judge model**
+(Ollama) for bulk runs, keeping the free hosted judge for CI.
 
 ### Acceptance tests (evaluation harness)
 

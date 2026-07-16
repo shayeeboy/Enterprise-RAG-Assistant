@@ -22,10 +22,12 @@ const { judgeCase, judgeSettings, formatJudgeInput, JUDGE_SYSTEM_PROMPT } = requ
 const cfg = require("../src/rag/config");
 const { close } = require("../src/rag/db");
 
-// --- Aspirational quality goals (reported; the bar we want to hit) ---
-const GOAL_HALLUCINATION_MAX = 0.2; // ≤20% of answers may be unfaithful
-const GOAL_CORRECTNESS_MIN = 3.5; // mean correctness (0..5)
-const GOAL_HIT5_MIN = 0.8; // ≥80% semantic Hit@5
+// --- Near-term roadmap goals (reported; the next milestone we're driving to) ---
+// See the "Improvement roadmap" table in the README for the actions behind each
+// and the stretch targets beyond these.
+const GOAL_HALLUCINATION_MAX = 0.15; // faithfulness ≥ 85%
+const GOAL_CORRECTNESS_MIN = 3.6; // mean correctness (0..5)
+const GOAL_HIT5_MIN = 0.9; // ≥ 90% semantic Hit@5
 const GOAL_REFUSAL_MIN = 1.0; // 100% refusal on out-of-scope
 
 // --- CI regression floors (gate the exit code) ---
