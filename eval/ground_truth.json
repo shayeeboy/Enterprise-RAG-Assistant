@@ -83,6 +83,41 @@
     "keywords": ["relax", "fatigue", "stress", "injury"],
     "ground_truth": "Relaxation is central to avoiding fatigue and injury. Practice softly rather than loud, slow down or find a less tiring way to play when fatigue builds, and change hands as soon as you feel tired. Use parallel-set exercises to practice relaxation: accelerate a PS until stress builds, then find the arm and wrist motions that let you relax. Learn to control opposing muscles (flexor and extensor) independently so you are not fighting yourself, since stress is the worst enemy and the direct cause of fatigue and injury."
   },
+  {
+    "id": "speed-walls",
+    "question": "What are speed walls and how do I avoid them?",
+    "answerable": true,
+    "keywords": ["speed wall", "speed"],
+    "ground_truth": "A speed wall is a maximum speed beyond which a passage won't get faster no matter how hard you practice. In Chang's account speed walls are self-inflicted — you erect them yourself through incorrect practice: stress, wrong motions, premature hands-together practice, and habits like constant down-pressure on the keys that wastes energy and blocks fast finger motion. Avoid or eliminate them by practicing hands separately in short segments, staying relaxed, using correct motions, and not forcing speed; good rhythm (of the whole body, not just the fingertips) also helps speed."
+  },
+  {
+    "id": "slow-vs-fast",
+    "question": "Should I practice slowly or quickly?",
+    "answerable": true,
+    "keywords": ["slow", "fast", "speed"],
+    "ground_truth": "Chang's answer is nuanced. Don't practice very slowly without a good reason — aimless slow play wastes time; when you do play slowly, keep the same motions you'd use at speed, pursue several objectives at once, and don't drop below the speed at which slow practice stops helping. Because short segments are easy, you can and should practice much of the time at or beyond final speed. Some slow practice still has value even after you can play a piece — it supports memory and reliable performance — but the general rule is to get up to speed quickly on short segments rather than grind slowly."
+  },
+  {
+    "id": "warm-up",
+    "question": "How do I warm up before playing?",
+    "answerable": true,
+    "keywords": ["warm", "limber", "cold"],
+    "ground_truth": "Warming up (limbering) matters because cold, unplayed fingers can't perform well — Chang treats limbering as a distinct component of technique alongside conditioning. Mild warm-up exercises, stretching, calisthenics, Tai Chi or Yoga can help. In the run-up to a performance, play at medium then slow speed before you stop practicing (medium can substitute for slow if you're short on time or the piece is easy). Cold hands are often just the body withdrawing blood from the extremities to conserve heat, so gentle warming restores them."
+  },
+  {
+    "id": "mental-play",
+    "question": "What is mental play and how do I use it?",
+    "answerable": true,
+    "keywords": ["mental play", "MP", "mind"],
+    "ground_truth": "Mental play (MP) is originating the music in your mind and coaxing the piano to produce it, instead of waiting for the fingers and piano to make the sound (which gives a flat, unpredictable performance). Chang treats MP as nearly all-encompassing — it underlies learning and technique, memorization, absolute pitch, performance, controlling nervousness, composition, and interpretation. It is closely tied to memory: being able to play a piece in your head, away from the keyboard. Develop it by memorizing pieces and practicing playing them mentally; fast play can also help speed up the brain to think ahead."
+  },
+  {
+    "id": "buy-piano",
+    "question": "How should I choose or buy a piano?",
+    "answerable": true,
+    "keywords": ["piano", "grand", "upright", "buy"],
+    "ground_truth": "For serious technical development an advanced pianist will prefer a grand piano over an upright or electronic — but only if the grand is tuned at least twice a year and regulated and voiced as needed; many uprights don't give enough advantage over a quality electronic to justify them. Buying an acoustic piano is often a hit-or-miss, stressful experience, so buying new from a reputable dealer is safer; mass-produced pianos (e.g. Yamaha, Kawai) have fairly uniform quality so you know what you'll get, while expensive hand-made pianos vary more. A quality grand also helps inspire composing."
+  },
 
   {
     "id": "oos-capital-france",
@@ -97,5 +132,26 @@
     "answerable": false,
     "keywords": [],
     "ground_truth": "Out of scope. Baking is not a piano topic and is not in this knowledge base. The correct behavior is refusal — stating the answer is not in the knowledge base rather than fabricating a recipe."
+  },
+  {
+    "id": "oos-piano-history",
+    "question": "What is the history of the piano?",
+    "answerable": false,
+    "keywords": [],
+    "ground_truth": "Out of scope (adversarial near-miss). This knowledge base is about piano practice and technique, not the instrument's history, invention, or evolution. Even though it's piano-related, the correct behavior is to refuse — the history of the piano is not covered here, and the system must not stitch practice-technique chunks into a history answer."
+  },
+  {
+    "id": "oos-tune-piano",
+    "question": "How do I tune a piano myself?",
+    "answerable": false,
+    "keywords": [],
+    "ground_truth": "Out of scope (adversarial near-miss). The knowledge base mentions that a piano should be tuned regularly but does not explain how to tune one (pin setting, temperament, using a tuning lever). The correct behavior is to refuse rather than fabricate a tuning procedure from unrelated practice-technique passages."
+  },
+  {
+    "id": "oos-jazz-improv",
+    "question": "How do I play jazz improvisation?",
+    "answerable": false,
+    "keywords": [],
+    "ground_truth": "Out of scope (adversarial near-miss). This knowledge base covers classical piano practice and technique (Chang, Hanon); jazz improvisation — voicings, ii-V-I patterns, soloing over changes — is not in it. The correct behavior is to refuse rather than improvise an answer from technique chunks."
   }
 ]

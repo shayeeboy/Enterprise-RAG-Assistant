@@ -77,12 +77,29 @@ pass("LLM-judge: xml formatting + json parsing + schema validation");
 
 // 7. ground-truth dataset integrity
 const gt = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "eval", "ground_truth.json"), "utf8"));
-assert.ok(Array.isArray(gt) && gt.length >= 12, "ground-truth set should have >= 12 cases");
+assert.ok(Array.isArray(gt) && gt.length >= 20, "ground-truth set should have >= 20 cases");
 const answerable = gt.filter((q) => q.answerable);
-assert.ok(answerable.length >= 10, "expected >= 10 answerable cases");
+assert.ok(answerable.length >= 15, "expected >= 15 answerable cases");
+assert.ok(gt.filter((q) => !q.answerable).length >= 4, "expected >= 4 out-of-scope cases");
 assert.ok(answerable.every((q) => typeof q.ground_truth === "string" && q.ground_truth.length > 40), "every answerable case needs a substantive golden answer");
 assert.ok(gt.some((q) => !q.answerable), "must include out-of-scope cases");
 assert.ok(new Set(gt.map((q) => q.id)).size === gt.length, "case ids must be unique");
 pass(`ground-truth dataset integrity (${answerable.length} answerable + ${gt.length - answerable.length} out-of-scope)`);
+
+// 8. Faithfulness trim (enforceCitations) — drop uncited claims, keep the rest
+const { enforceCitations } = require("../src/rag/guardrails");
+const fchunks = [{ title: "A", page_start: 1, text: "x" }, { title: "B", page_start: 2, text: "y" }];
+const r1 = enforceCitations(
+  "Practice hands separately to build speed and control over time [1]. This other sentence makes a substantive claim with no citation whatsoever.",
+  fchunks
+);
+assert.ok(r1.text.includes("[1]"), "cited sentence is kept");
+assert.ok(!/other sentence/.test(r1.text), "uncited substantive claim is dropped");
+assert.strictEqual(r1.dropped, 1, "exactly one sentence dropped");
+const r2 = enforceCitations("Do this:\n- Keep the fingers close to the keys [1].", fchunks);
+assert.ok(/Do this:/.test(r2.text) && /\[1\]/.test(r2.text), "colon lead-in and cited list item kept");
+const refusalish = "I could not find an answer to that in the piano knowledge base, sorry.";
+assert.strictEqual(enforceCitations(refusalish, fchunks).text, refusalish, "all-uncited answer preserved (never gutted)");
+pass("faithfulness trim: enforceCitations");
 
 console.log("\nAll wiring + logic checks passed.");

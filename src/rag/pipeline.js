@@ -10,7 +10,7 @@
  * tokens, costUsd) and logged by the server — see src/rag/trace.js.
  */
 const cfg = require("./config");
-const { validateInput, groundingGuard, REFUSAL } = require("./guardrails");
+const { validateInput, groundingGuard, enforceCitations, REFUSAL } = require("./guardrails");
 const { rewriteQuery } = require("./rewrite");
 const { hybridRetrieve } = require("./retrieve");
 const { rerank } = require("./rerank");
@@ -137,9 +137,17 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
   }
   addTokens(trace, llmRes.usage);
   // Strip a stray literal "[n]" the model may echo from the instruction.
-  const answer = (llmRes.content || "").replace(/^\s*\[n\]\s*/i, "").trim();
+  let answer = (llmRes.content || "").replace(/^\s*\[n\]\s*/i, "").trim();
 
-  // 11–12. Citations → Grounding guardrail
+  // 11. Faithfulness trim — drop substantive sentences that cite no source.
+  let uncitedDropped = 0;
+  if (cfg.ENFORCE_CITATIONS) {
+    const trimmed = enforceCitations(answer, top);
+    answer = trimmed.text;
+    uncitedDropped = trimmed.dropped;
+  }
+
+  // 12. Citations → Grounding guardrail
   const { grounded, citations } = groundingGuard(answer, top);
   const finalAnswer = grounded
     ? answer
@@ -153,7 +161,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
     citations,
     sources: sourceList(top),
     contexts: contextList(top.slice(0, cfg.TOP_K)),
-    meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length }),
+    meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length, uncitedDropped }),
   };
 }
 

@@ -628,8 +628,13 @@ Out-of-scope questions are checked separately for correct **refusal**.
   bias a model has when grading its own output.
 - **$0:** the judge reuses the same Groq free tier as generation; a token-aware
   sliding-window limiter paces calls under the model's tokens-per-minute cap.
-- **Ground truth:** 12 golden answers written from the corpus itself
-  ([`eval/ground_truth.json`](eval/ground_truth.json)) plus 2 out-of-scope cases.
+- **Faithful generation:** answers are generated at **temperature 0** and passed
+  through a **citation-grounding trim** (`ENFORCE_CITATIONS`) that drops
+  substantive sentences citing no source — both target the faithfulness metric.
+- **Ground truth:** **17** golden answers written from the corpus itself
+  ([`eval/ground_truth.json`](eval/ground_truth.json)) plus **5** out-of-scope
+  cases, including adversarial near-misses (piano-adjacent but uncovered — piano
+  history, self-tuning, jazz improv).
 
 ### Gaps addressed
 
@@ -659,6 +664,14 @@ tightening the generation prompt moved faithfulness **67% → 75%** and correctn
 learned*). CI gates on **regression floors** set below this baseline, so the
 build stays green at current quality and only a real regression fails it.
 
+> **⚠️ Numbers pending refresh.** These figures are from the initial
+> **12-question** run at generation temp 0.2, *before* the faithfulness work in
+> the roadmap below. The judged set is now **17 answerable + 5 out-of-scope**,
+> generation is **temperature 0** with a citation-grounding trim, and the
+> near-term goals are raised — re-run `npm run eval:judge` once the Groq
+> free-tier daily token quota resets to measure the expanded set with these
+> changes.
+
 ### Improvement roadmap
 
 The goals above are a roadmap, not a claim. Below is where each metric stands
@@ -667,11 +680,11 @@ most of it directly motivated by what the judge's reasoning traces flagged.
 
 | Metric | Current | Near-term | Stretch | How to get there |
 |---|---|---|---|---|
-| Faithfulness (no hallucination) | 75% | ≥ 85% | ≥ 95% | Generate at **temperature 0** in production; add a post-generation per-sentence **entailment/citation check** that trims any claim no source supports; harden the grounding prompt ("state only what a source explicitly says — never infer"); raise the rerank threshold so marginal chunks don't tempt the model. |
+| Faithfulness (no hallucination) | 75% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation + a citation-grounding trim (`ENFORCE_CITATIONS`) that drops substantive sentences citing no source. **Next:** a per-sentence **entailment (NLI) check**; harden the grounding prompt ("state only what a source explicitly says — never infer"); raise the rerank threshold so marginal chunks don't tempt the model. |
 | Answer correctness (0–5) | 3.08 | ≥ 3.6 | ≥ 4.2 | Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
 | Semantic Hit@5 | 83% | ≥ 90% | ≥ 95% | **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
 | Out-of-scope refusal | 100% | 100% (hold) | 100% (hold) | Keep the **hard-100% CI floor**; grow the out-of-scope set with **adversarial near-misses** (piano-adjacent but uncovered) so a future prompt change can't silently regress it. |
-| Eval confidence | 14 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | Grow the golden set; report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
+| Eval confidence | 22 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | ✅ **shipped:** grew the set 14 → 22 (17 answerable + 5 out-of-scope, incl. adversarial near-misses). **Next:** report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
 
 **Enabler:** larger, repeated eval runs need headroom beyond the Groq free
 tier's 100k-tokens/day cap — either a paid dev tier or a **local judge model**

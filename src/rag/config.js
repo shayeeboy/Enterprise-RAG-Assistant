@@ -23,7 +23,10 @@ module.exports = {
   OLLAMA_HOST: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
   LLM_BASE_URL: process.env.LLM_BASE_URL || "", // for any OpenAI-compatible endpoint
   LLM_API_KEY: process.env.LLM_API_KEY || "",
-  LLM_TEMPERATURE: num(process.env.LLM_TEMPERATURE, 0.2),
+  // Default 0 (greedy): the eval showed sampling drift was a source of both
+  // hallucination and run-to-run noise; deterministic generation is more
+  // faithful and reproducible. Override with LLM_TEMPERATURE for more variety.
+  LLM_TEMPERATURE: num(process.env.LLM_TEMPERATURE, 0),
   // Cost estimation (per 1K tokens). 0 = free/local (Ollama). Set these only if
   // you point at a metered provider, so the trace can report $ per request.
   LLM_COST_PROMPT_PER_1K: num(process.env.LLM_COST_PROMPT_PER_1K, 0),
@@ -39,6 +42,12 @@ module.exports = {
   JUDGE_TEMPERATURE: num(process.env.JUDGE_TEMPERATURE, 0),
   JUDGE_BASE_URL: process.env.JUDGE_BASE_URL || "",
   JUDGE_API_KEY: process.env.JUDGE_API_KEY || "",
+
+  // --- Faithfulness ---
+  // After generation, drop substantive answer sentences that carry no valid
+  // citation (a claim with no source) to raise faithfulness. Conservative:
+  // keeps lead-ins, refusals, and never trims an answer down to nothing.
+  ENFORCE_CITATIONS: bool(process.env.ENFORCE_CITATIONS, true),
 
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
