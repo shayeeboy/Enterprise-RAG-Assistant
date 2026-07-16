@@ -86,12 +86,18 @@ each with how it's verified and where the automated test lives:
 | Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
 | Latency | p50 / p95 tracked and visible | p50 ~16.9s / p95 ~23.7s | observability · `/stats` |
 | Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
+| Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **75%** (hallucination 25%) | `npm run eval:judge` |
+| Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **3.08 / 5** | `npm run eval:judge` |
+| Semantic Hit@5 (LLM-judge) | top chunks semantically contain the answer (not keyword match) | **83% (10/12)** | `npm run eval:judge` |
 
-**Not yet measured (honest gaps):** true hallucination rate and answer
-correctness / task-completion need judged ground truth (planned via an
-LLM-judge harness); Hit@5 uses a keyword-relevance proxy over a 10-question
-set, so it's a regression signal, not a human-validated benchmark; there is
-no response cache, so "cache hit rate" is N/A.
+**Now measured (Phase 4 — [LLM-Judge evaluation](#phase-4-llm-judge-evaluation)):**
+a deterministic LLM-judge now scores true hallucination rate, answer correctness
+(vs golden answers), and a *semantic* Hit@5 — closing the two honest gaps that
+previously needed human judgement. Reference run: **faithfulness 75%,
+correctness 3.08 / 5, semantic Hit@5 83%, refusal 100%** — deliberately honest
+"in progress" numbers that surfaced real weaknesses the keyword proxy hid (it
+had reported Hit@5 100%). Still N/A: there is no response cache, so "cache hit
+rate" doesn't apply.
 
 **Key trade-off decisions.**
 - **Local embeddings + local reranker over hosted APIs, LLM kept
@@ -134,6 +140,7 @@ and swappable.
 | [**Phase 1 — Ingestion**](#phase-1-ingestion) | PDFs → parse → chunk → metadata → local embeddings → Neon pgvector | 985 chunks indexed, fully offline, no API key |
 | [**Phase 2 — Query-time assistant**](#phase-2-query-time-assistant) | 13-step RAG workflow: rewrite → hybrid search → rerank → LLM → citations → guardrails | grounded, cited answers; CLI + API + chat UI |
 | [**Phase 3 — Hosting & observability**](#phase-3-hosting-and-observability) | deploy-ready hardening, LLM moved to Groq free tier, per-request tracing | **~252 s → ~11 s** at **$0** (see below) |
+| [**Phase 4 — LLM-Judge evaluation**](#phase-4-llm-judge-evaluation) | deterministic judge scores faithfulness, answer-correctness, and semantic Hit@5 vs golden answers | closes the human-judgment gaps; faithfulness 75%, correctness 3.08/5, refusal 100%, $0 |
 
 **Knowledge base (this build):**
 
@@ -148,7 +155,7 @@ and swappable.
 - **Grounded:** answers cite their sources by page; guardrails refuse when the knowledge base doesn't support an answer.
 - **Portable:** every stage is env-swappable (`EMBED_MODEL`, `RERANK_MODEL`, `LLM_PROVIDER`, …); no vendor lock-in.
 
-**Navigate:** [Try it live](#try-it-live) · [Live observability](#live-observability) · [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
+**Navigate:** [Try it live](#try-it-live) · [Live observability](#live-observability) · [Phase 1](#phase-1-ingestion) · [Phase 2](#phase-2-query-time-assistant) · [Phase 3](#phase-3-hosting-and-observability) · [Phase 4](#phase-4-llm-judge-evaluation) · [Repo structure](#repo-structure) · [Tools and services](#tools-and-services) · [Lessons learned](#lessons-learned)
 
 ---
 
@@ -585,6 +592,90 @@ covers DB + LLM health):
 
 ---
 
+## Phase 4: LLM-Judge evaluation
+
+Phase 2's acceptance eval (`npm run eval`) measures retrieval with a **keyword
+proxy** — a chunk counts as relevant if it contains an expected word. That's a
+fast regression signal, but it can't tell whether an *answer* is faithful to its
+sources or actually correct, and it reported a rosy **Hit@5 100% / MRR 0.938**.
+Phase 4 closes those honest gaps with a deterministic **LLM-as-Judge**
+(`npm run eval:judge`) that scores three things the proxy cannot.
+
+![Phase 4 — LLM-as-Judge evaluation workflow](assets/phase4-eval.svg)
+
+### What it measures
+
+For each question the harness runs the **real pipeline** to get the system answer
+plus the exact top-K context it was built from, then a judge LLM scores:
+
+- **Faithfulness / hallucination** (0 = faithful, 1 = hallucinated): is every
+  assertion in the answer supported by the retrieved context?
+- **Answer correctness** (0–5): how completely does the answer match a
+  human-validated **golden answer**, using the ground truth as the gold standard?
+- **Semantic Hit@5** (pass/fail): do the top chunks actually contain the
+  substance needed to answer — judged semantically, not by keyword match?
+
+Out-of-scope questions are checked separately for correct **refusal**.
+
+### How it stays honest and free
+
+- **Deterministic rubric:** the judge runs at **temperature 0** with a fixed
+  rubric prompt (embedded verbatim in [`src/rag/judge.js`](src/rag/judge.js)) and
+  emits strict JSON. An LLM judge is still not a perfect oracle — see the variance
+  note in *Lessons learned*.
+- **Cross-model judging:** the generator is `llama-3.3-70b-versatile`; the judge
+  is a **different** model, `openai/gpt-oss-120b`, to blunt the self-preference
+  bias a model has when grading its own output.
+- **$0:** the judge reuses the same Groq free tier as generation; a token-aware
+  sliding-window limiter paces calls under the model's tokens-per-minute cap.
+- **Ground truth:** 12 golden answers written from the corpus itself
+  ([`eval/ground_truth.json`](eval/ground_truth.json)) plus 2 out-of-scope cases.
+
+### Gaps addressed
+
+| Honest gap (before) | Action taken (Phase 4) | Outcome |
+|---|---|---|
+| Hallucination rate + answer correctness were **not measured** — they needed human judgement | Deterministic LLM-judge scores faithfulness (answer ⊂ context) and correctness (0–5 vs golden answers) | Now measured every run: **faithfulness 75%, mean correctness 3.08 / 5** |
+| Hit@5 was a **keyword-match proxy** (reported 100%) that can't tell real substance from a coincidental word | Judge re-scores Hit@5 **semantically** against the golden answer | Honest **semantic Hit@5 83% (10/12)** — the proxy was over-optimistic |
+| No answer-quality regression signal in CI | `eval:judge` added to the gated CI job with regression floors (refusal floor is a hard 100%) | Build fails on a genuine quality regression, not on normal run-to-run noise |
+
+### Results (reference run)
+
+Generator `llama-3.3-70b-versatile`, judge `openai/gpt-oss-120b` (temp 0),
+over 12 answerable + 2 out-of-scope questions:
+
+| Metric | Result | Aspirational goal | Met? |
+|---|---|---|---|
+| Faithfulness (no hallucination) | **75%** (hallucination 25%) | ≥ 80% | ✗ in progress |
+| Mean answer correctness | **3.08 / 5** | ≥ 3.5 | ✗ in progress |
+| Semantic Hit@5 | **83%** (10/12) | ≥ 80% | ✓ |
+| Out-of-scope refusal | **100%** (2/2) | 100% | ✓ |
+
+The judge **surfaced real problems the keyword eval hid** — that is the point.
+Faithfulness and correctness are honest "in progress" numbers, not a
+green-washed 100%. From the first run to this one, fixing a harness bug and
+tightening the generation prompt moved faithfulness **67% → 75%** and correctness
+**2.67 → 3.08** while holding out-of-scope refusal at 100% (see *Lessons
+learned*). CI gates on **regression floors** set below this baseline, so the
+build stays green at current quality and only a real regression fails it.
+
+### Acceptance tests (evaluation harness)
+
+The judge harness is itself tested, so its verdicts can be trusted:
+
+| Test case | Expectation | Where |
+|---|---|---|
+| Judge output is valid JSON in the required schema | parses; out-of-range metrics rejected | `npm run check` |
+| Clean, code-fenced, and prose-wrapped outputs all parse | robust extraction | `npm run check` |
+| Judge sees the **exact** context the generator used | no false hallucination on `[6]` citations | `src/rag/judge.js` (top-K, not top-5) |
+| Ground-truth dataset integrity | ≥ 12 cases, every answerable has a golden answer, unique ids | `npm run check` |
+| Rate-limited generation is never scored as 0 | run aborts loudly instead of reporting bogus metrics | `scripts/eval-judge.js` |
+| Full judge run (DB + LLM) | faithfulness / correctness / Hit@5 / refusal vs floors | `npm run eval:judge` (gated CI) |
+
+[↑ Back to top](#executive-summary)
+
+---
+
 ## Repo structure
 
 ```
@@ -592,7 +683,9 @@ Enterprise-RAG-Assistant/
 ├── README.md                  ← this file
 ├── package.json
 ├── assets/                    ← phase architecture diagrams (SVG)
-├── eval/questions.json        ← labeled retrieval-quality benchmark (npm run eval)
+├── eval/
+│   ├── questions.json         ← keyword retrieval benchmark (npm run eval)
+│   └── ground_truth.json      ← golden answers for the LLM-judge (npm run eval:judge)
 ├── docs/PHASE-3.md            ← hosting analysis, A/B results, observability
 ├── data/
 │   ├── raw/                   ← pdftotext output (gitignored — regenerate from PDFs)
@@ -604,11 +697,13 @@ Enterprise-RAG-Assistant/
 │   ├── 05_index.js            ← requires DATABASE_URL
 │   ├── 06_query.js            ← Phase 2: ask a question from the CLI
 │   ├── check.js               ← offline wiring/logic checks (npm run check)
-│   └── smoke.js               ← full DB+models+LLM health check (npm run smoke)
+│   ├── smoke.js               ← full DB+models+LLM health check (npm run smoke)
+│   └── eval-judge.js          ← Phase 4 LLM-judge harness (npm run eval:judge)
 ├── src/rag/                   ← Phase 2 query library (one module per stage)
 │   ├── pipeline.js            ← orchestrates the full workflow
 │   ├── rewrite.js  embed.js  retrieve.js  rerank.js
 │   ├── prompt.js   llm.js     guardrails.js  trace.js
+│   ├── judge.js               ← Phase 4 LLM-as-Judge (rubric, XML I/O, JSON parse)
 │   ├── db.js                  ← pooled Neon connection
 │   └── config.js              ← env-driven, free/local defaults
 ├── server.js                 ← API + chat UI (CORS, rate limit, access code)
@@ -636,7 +731,8 @@ Enterprise-RAG-Assistant/
 | Backend hosting | **Google Cloud Run** (free tier, scale-to-zero) | Runs the Dockerfile unchanged at 1–4 GiB; chosen after HF Docker (paid) and Render (512 MB, too small) |
 | Frontend hosting | **GitHub Pages** (Actions deploy) | Static chat UI; points at the backend via `?api=` |
 | Observability | in-house trace (`trace.js`) + `query_logs` in Neon (`logstore.js`) | Per-request latency/tokens/cost; searchable + aggregated, no external SDK |
-| Acceptance testing | in-house (`check.js` units · `smoke.js` integration · `eval.js` retrieval quality) | Hit@5/MRR/refusal + trust-logic assertions, no external test framework |
+| Evaluation (LLM-judge) | **Groq** `openai/gpt-oss-120b` (cross-model, temp 0) via `judge.js` | Deterministic faithfulness / correctness / semantic Hit@5; a different model than the generator to reduce self-preference bias; $0 |
+| Acceptance testing | in-house (`check.js` units · `smoke.js` integration · `eval.js` retrieval quality · `eval-judge.js` LLM-judge) | Hit@5/MRR/refusal + faithfulness/correctness + trust-logic assertions, no external test framework |
 
 ## Lessons learned
 
@@ -672,5 +768,15 @@ resolved them.
 | HF Docker Spaces needed a paid plan (only static is free) | Pivoted the backend to **Google Cloud Run**, which runs the Dockerfile unchanged on its free tier. Don't assume a "free Docker host" — check the plan before committing. |
 | Cloud Run `/ask` OOM-killed (503) at 2 GiB | Cloud Run's filesystem is **in-memory**, so the runtime model download counts against RAM. Fixed by raising to 4 GiB and baking the models into the image at build (`scripts/warmup.js`) so nothing downloads at runtime. |
 | `Gaia id not found for email …` in Cloud Shell | Harmless background-telemetry error — the deploy still succeeds. Don't chase it. |
+
+**Phase 4 — LLM-Judge evaluation**
+
+| Issue | Resolution / lesson |
+|---|---|
+| The keyword eval reported a reassuring Hit@5 100% | A semantic LLM-judge showed the honest picture: Hit@5 83%, faithfulness 75%, correctness ~3/5. A proxy that only checks for a keyword can't see whether the *answer* is right — measure the answer, not just the retrieval. |
+| Judge falsely flagged hallucinations on `[6]` citations | The judge saw only the top-5 chunks while the generator prompts with top-6, so valid citations to `[6]` were scored as fabrications. The judge's *own reasoning traces* exposed the bug. Fixed by showing the judge the exact top-K the generator used — the judge must see precisely what the model saw. |
+| Making answers more complete broke refusal (100% → 50%) | A "cover the key points" prompt made the model stretch an unrelated chunk into an answer for "capital of France." Scoping completeness to in-scope questions and re-emphasizing refusal restored it to 100%. Completeness and refusal pull in opposite directions — tune for both, and measure both. |
+| Groq free-tier **daily token cap** hit mid-iteration | Five eval runs exhausted the generator's 100k-tokens/day limit; the pipeline swallowed the 429 and returned an error string, which the judge scored as 0 — silent garbage. Hardened the harness to **abort loudly** on a rate-limited generation, and made `eval/judge-results.json` a regenerable, gitignored artifact. |
+| An LLM judge is not perfectly deterministic | Even at temperature 0 the judge flipped a few individual verdicts between runs (the aggregate Hit@5 held at 83%). Treat the judge as a strong signal, not an oracle: report aggregates, gate CI on generous **regression floors**, and keep the fast keyword eval as a cheap complement. |
 
 [↑ Back to top](#executive-summary)

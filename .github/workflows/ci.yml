@@ -29,12 +29,20 @@ jobs:
       - id: guard
         env:
           DB: ${{ secrets.DATABASE_URL }}
+          LLM: ${{ secrets.LLM_API_KEY }}
         run: |
           if [ -n "$DB" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No DATABASE_URL secret set — skipping full smoke (offline check already passed)."
+          fi
+          # The LLM-judge (Phase 4) additionally needs an LLM key.
+          if [ -n "$DB" ] && [ -n "$LLM" ]; then
+            echo "judge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "judge=false" >> "$GITHUB_OUTPUT"
+            echo "No LLM_API_KEY secret set — skipping LLM-judge eval."
           fi
 
       - uses: actions/setup-node@v4
@@ -60,3 +68,16 @@ jobs:
         if: steps.guard.outputs.run == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Phase 4 — deterministic LLM-judge (faithfulness / answer-correctness /
+      # semantic Hit@5). Runs only when an LLM_API_KEY secret is present; uses
+      # the same free-tier provider as production, so it costs $0.
+      - run: npm run eval:judge
+        if: steps.guard.outputs.judge == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LLM_PROVIDER: openai-compatible
+          LLM_BASE_URL: https://api.groq.com/openai/v1
+          LLM_MODEL: llama-3.3-70b-versatile
+          JUDGE_MODEL: openai/gpt-oss-120b
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

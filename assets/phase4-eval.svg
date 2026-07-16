@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 860" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="a4" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8A5A2B"/></marker>
+  </defs>
+  <rect x="1" y="1" width="638" height="858" rx="14" fill="#F7F4EF" stroke="#DED7CB"/>
+  <text x="24" y="34" font-size="15" font-weight="700" fill="#8A5A2B">Phase 4 — LLM-as-Judge evaluation</text>
+  <text x="24" y="52" font-size="10.5" fill="#6B655C">Deterministic faithfulness / answer-correctness / semantic Hit@5 — closes the human-judgment gap, $0</text>
+
+  <!-- Ground truth -->
+  <rect x="170" y="70" width="300" height="52" rx="9" fill="#EBDCC8" stroke="#8A5A2B" stroke-width="1.5"/>
+  <text x="320" y="91" text-anchor="middle" font-size="12" font-weight="700" fill="#12100E">Ground-Truth set</text>
+  <text x="320" y="108" text-anchor="middle" font-size="9.5" fill="#6B655C">eval/ground_truth.json — 12 corpus-grounded golden answers + 2 out-of-scope</text>
+  <line x1="320" y1="122" x2="320" y2="140" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- RAG pipeline (real) -->
+  <rect x="170" y="140" width="300" height="52" rx="9" fill="#FCFAF6" stroke="#8A5A2B" stroke-width="1.5"/>
+  <text x="320" y="161" text-anchor="middle" font-size="12" font-weight="700" fill="#12100E">Real RAG pipeline (per question)</text>
+  <text x="320" y="178" text-anchor="middle" font-size="9.5" fill="#6B655C">hybrid search + RRF + rerank + LLM  →  system answer + exact top-K context</text>
+  <line x1="320" y1="192" x2="320" y2="210" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- Four XML inputs -->
+  <text x="320" y="226" text-anchor="middle" font-size="10" font-weight="700" fill="#8A5A2B">assemble judge inputs (XML)</text>
+  <g font-size="9.5">
+    <rect x="40" y="236" width="130" height="40" rx="7" fill="#EAF0EA" stroke="#5B7355" stroke-width="1.2"/>
+    <text x="105" y="253" text-anchor="middle" font-weight="700" fill="#12100E">&lt;user_query&gt;</text>
+    <text x="105" y="267" text-anchor="middle" fill="#6B655C">the question</text>
+
+    <rect x="185" y="236" width="130" height="40" rx="7" fill="#EAF0EA" stroke="#5B7355" stroke-width="1.2"/>
+    <text x="250" y="253" text-anchor="middle" font-weight="700" fill="#12100E">&lt;ground_truth&gt;</text>
+    <text x="250" y="267" text-anchor="middle" fill="#6B655C">golden answer</text>
+
+    <rect x="330" y="236" width="140" height="40" rx="7" fill="#EAF0EA" stroke="#5B7355" stroke-width="1.2"/>
+    <text x="400" y="251" text-anchor="middle" font-weight="700" fill="#12100E">&lt;retrieved_context&gt;</text>
+    <text x="400" y="265" text-anchor="middle" fill="#6B655C">top-5 chunks</text>
+
+    <rect x="485" y="236" width="115" height="40" rx="7" fill="#EAF0EA" stroke="#5B7355" stroke-width="1.2"/>
+    <text x="542" y="253" text-anchor="middle" font-weight="700" fill="#12100E">&lt;system_answer&gt;</text>
+    <text x="542" y="267" text-anchor="middle" fill="#6B655C">RAG output</text>
+  </g>
+  <line x1="320" y1="276" x2="320" y2="300" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- Judge -->
+  <rect x="150" y="300" width="340" height="66" rx="10" fill="#8A5A2B" stroke="#6E4622" stroke-width="1.5"/>
+  <text x="320" y="324" text-anchor="middle" font-size="13" font-weight="700" fill="#FCFAF6">LLM-as-Judge</text>
+  <text x="320" y="341" text-anchor="middle" font-size="9.5" fill="#F2E6D6">fixed rubric prompt · temperature 0 (deterministic)</text>
+  <text x="320" y="356" text-anchor="middle" font-size="9.5" fill="#F2E6D6">cross-judge: openai/gpt-oss-120b (≠ generator) · JSON only · Groq free tier</text>
+  <line x1="320" y1="366" x2="320" y2="392" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- Three metrics -->
+  <g font-size="10">
+    <rect x="40" y="392" width="175" height="70" rx="9" fill="#FCEEE8" stroke="#B5623C" stroke-width="1.4"/>
+    <text x="127" y="414" text-anchor="middle" font-size="11" font-weight="700" fill="#12100E">Hallucination</text>
+    <text x="127" y="431" text-anchor="middle" font-size="9.5" fill="#6B655C">answer ⊂ retrieved context?</text>
+    <text x="127" y="450" text-anchor="middle" font-size="10" font-weight="700" fill="#B5623C">0 = faithful · 1 = fail</text>
+
+    <rect x="232" y="392" width="176" height="70" rx="9" fill="#EBEFF6" stroke="#40618C" stroke-width="1.4"/>
+    <text x="320" y="414" text-anchor="middle" font-size="11" font-weight="700" fill="#12100E">Answer correctness</text>
+    <text x="320" y="431" text-anchor="middle" font-size="9.5" fill="#6B655C">vs golden ground truth</text>
+    <text x="320" y="450" text-anchor="middle" font-size="10" font-weight="700" fill="#40618C">score 0 → 5</text>
+
+    <rect x="425" y="392" width="175" height="70" rx="9" fill="#EAF0EA" stroke="#5B7355" stroke-width="1.4"/>
+    <text x="512" y="414" text-anchor="middle" font-size="11" font-weight="700" fill="#12100E">Semantic Hit@5</text>
+    <text x="512" y="431" text-anchor="middle" font-size="9.5" fill="#6B655C">top-5 hold the answer data?</text>
+    <text x="512" y="450" text-anchor="middle" font-size="10" font-weight="700" fill="#5B7355">pass / fail (binary)</text>
+  </g>
+  <line x1="320" y1="462" x2="320" y2="486" stroke="#8A5A2B" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- Aggregate + gate -->
+  <rect x="120" y="486" width="400" height="72" rx="10" fill="#EBDCC8" stroke="#8A5A2B" stroke-width="1.5"/>
+  <text x="320" y="509" text-anchor="middle" font-size="12" font-weight="700" fill="#12100E">Aggregate + acceptance gate</text>
+  <text x="320" y="527" text-anchor="middle" font-size="9.5" fill="#6B655C">eval/judge-results.json · npm run eval:judge · gated CI job</text>
+  <text x="320" y="544" text-anchor="middle" font-size="9.5" fill="#6B655C">targets: hallucination ≤ 20% · correctness ≥ 3.5/5 · Hit@5 ≥ 80% · refusal = 100%</text>
+
+  <!-- Two-tier note -->
+  <rect x="40" y="592" width="560" height="86" rx="10" fill="#FCFAF6" stroke="#DED7CB"/>
+  <text x="56" y="614" font-size="10.5" font-weight="700" fill="#8A5A2B">Complements the fast keyword eval (npm run eval)</text>
+  <text x="56" y="632" font-size="9.5" fill="#6B655C">Keyword Hit@5 stays as the no-LLM regression signal; the judge adds the high-fidelity semantic layer.</text>
+  <text x="56" y="650" font-size="9.5" fill="#6B655C">Out-of-scope questions are checked for correct refusal by the deterministic grounding guard (reported separately).</text>
+  <text x="56" y="668" font-size="9.5" fill="#6B655C">Deterministic = greedy temp-0 decoding + fixed rubric; cross-model judging reduces self-preference bias.</text>
+
+  <!-- Cost footer -->
+  <rect x="40" y="694" width="560" height="130" rx="10" fill="#EAF0EA" stroke="#5B7355"/>
+  <text x="56" y="716" font-size="10.5" font-weight="700" fill="#5B7355">Gaps closed</text>
+  <g font-size="9.5" fill="#3D4A39">
+    <text x="56" y="736">• True hallucination rate + answer correctness — no longer human-judged; measured against strict ground truth.</text>
+    <text x="56" y="754">• Hit@5 upgraded from a keyword-match proxy to a semantic retrieval-recall pass/fail judged against the golden answer.</text>
+    <text x="56" y="772">• Reuses the generation provider's free tier — the entire judge run costs $0.</text>
+    <text x="56" y="790" font-weight="700" fill="#5B7355">Honest caveat</text>
+    <text x="56" y="808">• An LLM judge is not perfectly deterministic and can carry model bias; it is a strong signal, not an oracle.</text>
+  </g>
+</svg>

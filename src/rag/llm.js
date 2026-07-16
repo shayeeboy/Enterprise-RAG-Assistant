@@ -4,18 +4,23 @@
  * whole assistant runs with zero API billing. Any OpenAI-compatible endpoint
  * can be swapped in via LLM_PROVIDER=openai-compatible + LLM_BASE_URL, without
  * touching the rest of the pipeline.
+ *
+ * `chat(messages, opts)` accepts an optional per-call override so callers like
+ * the Phase 4 LLM-Judge can use a different model / endpoint / temperature on
+ * the same provider (e.g. cross-judging on a second free-tier model) without
+ * affecting the production generation path, which calls `chat(messages)` plainly.
  */
 const cfg = require("./config");
 
-async function chatOllama(messages) {
-  const res = await fetch(`${cfg.OLLAMA_HOST}/api/chat`, {
+async function chatOllama(messages, o) {
+  const res = await fetch(`${o.ollamaHost}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: cfg.LLM_MODEL,
+      model: o.model,
       messages,
       stream: false,
-      options: { temperature: cfg.LLM_TEMPERATURE },
+      options: { temperature: o.temperature },
     }),
   });
   if (!res.ok) {
@@ -31,15 +36,15 @@ async function chatOllama(messages) {
   };
 }
 
-async function chatOpenAICompatible(messages) {
-  const base = cfg.LLM_BASE_URL.replace(/\/$/, "");
+async function chatOpenAICompatible(messages, o) {
+  const base = o.baseUrl.replace(/\/$/, "");
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(cfg.LLM_API_KEY ? { Authorization: `Bearer ${cfg.LLM_API_KEY}` } : {}),
+      ...(o.apiKey ? { Authorization: `Bearer ${o.apiKey}` } : {}),
     },
-    body: JSON.stringify({ model: cfg.LLM_MODEL, messages, temperature: cfg.LLM_TEMPERATURE }),
+    body: JSON.stringify({ model: o.model, messages, temperature: o.temperature }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -55,16 +60,29 @@ async function chatOpenAICompatible(messages) {
   };
 }
 
-async function chat(messages) {
-  switch (cfg.LLM_PROVIDER) {
+// Resolve effective call settings from config, applying any per-call overrides.
+function resolve(opts = {}) {
+  return {
+    provider: (opts.provider || cfg.LLM_PROVIDER).toLowerCase(),
+    model: opts.model || cfg.LLM_MODEL,
+    temperature: opts.temperature != null ? opts.temperature : cfg.LLM_TEMPERATURE,
+    ollamaHost: opts.ollamaHost || cfg.OLLAMA_HOST,
+    baseUrl: opts.baseUrl || cfg.LLM_BASE_URL,
+    apiKey: opts.apiKey || cfg.LLM_API_KEY,
+  };
+}
+
+async function chat(messages, opts = {}) {
+  const o = resolve(opts);
+  switch (o.provider) {
     case "ollama":
-      return chatOllama(messages);
+      return chatOllama(messages, o);
     case "openai":
     case "openai-compatible":
-      if (!cfg.LLM_BASE_URL) throw new Error("LLM_BASE_URL is required for an openai-compatible provider.");
-      return chatOpenAICompatible(messages);
+      if (!o.baseUrl) throw new Error("LLM_BASE_URL is required for an openai-compatible provider.");
+      return chatOpenAICompatible(messages, o);
     default:
-      throw new Error(`Unknown LLM_PROVIDER: ${cfg.LLM_PROVIDER}`);
+      throw new Error(`Unknown LLM_PROVIDER: ${o.provider}`);
   }
 }
 

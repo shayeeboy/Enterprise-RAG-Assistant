@@ -1,0 +1,101 @@
+[
+  {
+    "id": "finger-independence",
+    "question": "How do I build finger independence?",
+    "answerable": true,
+    "keywords": ["independen", "parallel set"],
+    "ground_truth": "Chang teaches finger independence with a specific exercise: play each finger three to five times (e.g. CCCC DDDD EEEE FFFF GGGG) while keeping the other fingers depressed on their keys, without pressing down firmly — pressing hard causes stress and fatigue and grows unwanted slow muscles. The exercise is closely related to the parallel-set (PS) exercises; work on gradually increasing speed. Scales, arpeggios and finger-lifting exercises also develop independence, but the key principle is to develop control without building stress."
+  },
+  {
+    "id": "weak-4th-finger",
+    "question": "What should I do about a weak 4th finger?",
+    "answerable": true,
+    "keywords": ["4th finger", "fourth finger", "4th and 5th", "finger 4"],
+    "ground_truth": "The 4th finger is anatomically limited — it cannot be lifted beyond a certain point — so Chang says not to force it. The only real requirement on the 4th finger is not to inadvertently depress a key, which needs only a small lift, so you can play with it barely off the keys. Practice lifting each finger independently (this can even be done on a tabletop, especially finger 4), and use Exercise #1 as a diagnostic tool to find the weak fingers (typically 4 and 5) rather than trying to strengthen finger 4 with forceful high lifting."
+  },
+  {
+    "id": "difficult-passage",
+    "question": "How should I practice a difficult passage?",
+    "answerable": true,
+    "keywords": ["difficult", "passage", "segment"],
+    "ground_truth": "Divide the difficult passage into small, easy-to-play segments and practice hands separately (HS), getting each short segment up to speed before joining them and before adding pedal. Constantly change the practice speed instead of staying at one speed too long. Use parallel sets to diagnose the specific weaknesses in the passage and cycle them to get up to speed quickly; because short segments are easier, you can practice most of the time at or beyond final speed without ill effects."
+  },
+  {
+    "id": "memorize",
+    "question": "How do I memorize a piece of music?",
+    "answerable": true,
+    "keywords": ["memoriz"],
+    "ground_truth": "Memorize a piece while you are first learning it — Chang argues there is no faster way to memorize than to do it during initial learning, and for a difficult piece no faster way to learn than to memorize it. Start by learning how the music should sound (melody, rhythm), practice and memorize hands separately, and build several types of memory (including some photographic memory and theory-based associations that link the music to underlying theory). Memorizing is largely a free byproduct of proper learning, so memorize every worthwhile piece you play."
+  },
+  {
+    "id": "practice-scales",
+    "question": "What is the best way to practice scales?",
+    "answerable": true,
+    "keywords": ["scale", "arpeggio"],
+    "ground_truth": "Chang treats scales and arpeggios as genuine techniques to be practiced diligently, not mindless repetitive exercises. The book's core method is parallel-set (PS) and hands-separate practice rather than a dedicated scales drill, so the principles that apply are to stay relaxed, avoid practicing too loud (which causes fatigue and speed walls), and build speed through short segments. (Coverage of scales specifically is limited in this knowledge base.)"
+  },
+  {
+    "id": "faster-without-tension",
+    "question": "How can I play faster without tensing up?",
+    "answerable": true,
+    "keywords": ["speed", "fast", "relax"],
+    "ground_truth": "Speed comes from relaxation, not force. Practice hands separately, bring short segments up to speed using parallel-set exercises, and make only brief excursions into your fastest playing for exploration. Do not practice with all your strength for hours (counterproductive), and do not play so fast that you feel stress or make mistakes — that just practices mistakes and builds bad habits. The goal is to develop fast muscles and fast nerve responses while staying relaxed."
+  },
+  {
+    "id": "beginner-start",
+    "question": "How should a complete beginner start practicing?",
+    "answerable": true,
+    "keywords": ["beginner", "count"],
+    "ground_truth": "This knowledge base is a method book rather than a step-by-step absolute-beginner primer, but the guidance that applies to beginners is: count carefully (children should count out loud) and understand the time signature and rhythm from the start, practice hands separately, and work in short, easy segments brought up to speed. Much of the book focuses on developing technique via hands-separate practice and parallel sets rather than a beginner curriculum."
+  },
+  {
+    "id": "parallel-sets",
+    "question": "What are parallel sets and how do I use them?",
+    "answerable": true,
+    "keywords": ["parallel"],
+    "ground_truth": "A parallel set (PS) is a short group of notes played with a rapid, near-simultaneous rolling motion — you bring the fingers down almost together, delaying some slightly, so the group is played almost as fast as a chord and then controlled. PS exercises are one of the main pillars of Chang's method: they serve both as diagnostic tools to find your weaknesses and as technique-development tools. They are practiced hands separately, sped up toward near-chord speed and then relaxed and slowed to build independence, and they underpin the claim that nothing is too difficult to play if you know how to practice."
+  },
+  {
+    "id": "metronome",
+    "question": "How should I use a metronome when practicing?",
+    "answerable": true,
+    "keywords": ["metronome", "tempo", "count"],
+    "ground_truth": "Use the metronome to check your speed and beat accuracy and to catch counting or rhythm errors — Chang notes he is repeatedly surprised by errors found this way. Start pieces by counting carefully (beginners and children should count out loud), and if you have trouble bringing a piece up to speed, check your counting with the metronome. It is a checking tool; continuous reliance on it can mess up the rhythm, so it is not something to play along with constantly."
+  },
+  {
+    "id": "hands-separately",
+    "question": "Why should I practice hands separately?",
+    "answerable": true,
+    "keywords": ["hands separate", "separately", "HS"],
+    "ground_truth": "Hands-separate (HS) practice is the core of Chang's method — roughly 80% of the book deals with why you need it. It is the only way to rapidly increase speed and control without getting into trouble, because on a short segment you can work hard at 100% at any speed and concentrate on the more difficult hand. You transition to hands-together (HT) only after HS practice is faster than the final HT speed."
+  },
+  {
+    "id": "hanon-purpose",
+    "question": "What is the purpose of Hanon's exercises?",
+    "answerable": true,
+    "keywords": ["hanon"],
+    "ground_truth": "In this knowledge base (Chang's Fundamentals) Hanon-type finger exercises are treated critically rather than endorsed. Chang argues most such finger exercises largely waste time, can build stress and bad habits, and risk injury — and that Hanon never even mentions relaxation. He compares practicing Hanon every day to getting the same universal hospital checkup regardless of need, instead of diagnosing a specific weakness and targeting it (for example with parallel sets). So per this KB the takeaway is cautionary: targeted, diagnostic practice is preferred over rote Hanon drilling."
+  },
+  {
+    "id": "relax-avoid-fatigue",
+    "question": "How do I relax to avoid fatigue and injury while playing?",
+    "answerable": true,
+    "keywords": ["relax", "fatigue", "stress", "injury"],
+    "ground_truth": "Relaxation is central to avoiding fatigue and injury. Practice softly rather than loud, slow down or find a less tiring way to play when fatigue builds, and change hands as soon as you feel tired. Use parallel-set exercises to practice relaxation: accelerate a PS until stress builds, then find the arm and wrist motions that let you relax. Learn to control opposing muscles (flexor and extensor) independently so you are not fighting yourself, since stress is the worst enemy and the direct cause of fatigue and injury."
+  },
+
+  {
+    "id": "oos-capital-france",
+    "question": "What is the capital of France?",
+    "answerable": false,
+    "keywords": [],
+    "ground_truth": "Out of scope. This knowledge base only covers piano practice and technique (Chang's Fundamentals of Piano Practice and Hanon's Virtuoso Pianist). The correct behavior is to refuse or state that the question is not covered by the knowledge base — not to answer 'Paris' from general knowledge."
+  },
+  {
+    "id": "oos-sourdough",
+    "question": "How do I bake sourdough bread at home?",
+    "answerable": false,
+    "keywords": [],
+    "ground_truth": "Out of scope. Baking is not a piano topic and is not in this knowledge base. The correct behavior is refusal — stating the answer is not in the knowledge base rather than fabricating a recipe."
+  }
+]

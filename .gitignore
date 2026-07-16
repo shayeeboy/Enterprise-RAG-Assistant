@@ -7,3 +7,6 @@ node_modules/
 
 # Generated embedding output — ~30MB of vectors, regenerable via `npm run embed`
 data/chunks/all_chunks.embedded.json
+
+# Generated LLM-judge results — regenerable via `npm run eval:judge`
+eval/judge-results.json

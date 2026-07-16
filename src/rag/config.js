@@ -29,6 +29,17 @@ module.exports = {
   LLM_COST_PROMPT_PER_1K: num(process.env.LLM_COST_PROMPT_PER_1K, 0),
   LLM_COST_COMPLETION_PER_1K: num(process.env.LLM_COST_COMPLETION_PER_1K, 0),
 
+  // --- LLM-as-Judge (Phase 4 eval harness) ---
+  // The judge reuses the same provider/endpoint as generation (so it stays on
+  // the same free tier — no extra cost). By default it CROSS-JUDGES with a
+  // different model than the generator to reduce self-preference bias; set
+  // JUDGE_MODEL to "" to self-judge with LLM_MODEL. Temperature is forced to 0
+  // for determinism. Optional JUDGE_BASE_URL/JUDGE_API_KEY override the endpoint.
+  JUDGE_MODEL: process.env.JUDGE_MODEL !== undefined ? process.env.JUDGE_MODEL : "openai/gpt-oss-120b",
+  JUDGE_TEMPERATURE: num(process.env.JUDGE_TEMPERATURE, 0),
+  JUDGE_BASE_URL: process.env.JUDGE_BASE_URL || "",
+  JUDGE_API_KEY: process.env.JUDGE_API_KEY || "",
+
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
   HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 20), // pool size per search method

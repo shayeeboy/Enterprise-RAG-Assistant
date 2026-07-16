@@ -30,6 +30,20 @@ function sourceList(chunks) {
   }));
 }
 
+// Like sourceList but includes chunk text — used by the Phase 4 LLM-Judge to
+// evaluate faithfulness/Hit@5 against the exact context the answer was built on.
+function contextList(chunks) {
+  return chunks.map((c, i) => ({
+    n: i + 1,
+    title: c.title,
+    page_start: c.page_start,
+    page_end: c.page_end,
+    content_type: c.content_type,
+    rerank: c.rerank != null ? Number(c.rerank.toFixed(4)) : null,
+    text: c.text,
+  }));
+}
+
 function buildMeta(trace, extra = {}) {
   finalize(trace, {
     costPer1kPrompt: cfg.LLM_COST_PROMPT_PER_1K,
@@ -81,7 +95,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
 
   if (!candidates.length) {
     return {
-      ok: true, grounded: false, answer: REFUSAL, citations: [], sources: [],
+      ok: true, grounded: false, answer: REFUSAL, citations: [], sources: [], contexts: [],
       meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: 0 }),
     };
   }
@@ -102,6 +116,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
   if (!top.length || bestScore < cfg.RELEVANCE_FLOOR) {
     return {
       ok: true, grounded: false, answer: REFUSAL, citations: [], sources: [],
+      contexts: contextList(top.slice(0, cfg.TOP_K)),
       meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length }),
     };
   }
@@ -137,6 +152,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
     answer: finalAnswer,
     citations,
     sources: sourceList(top),
+    contexts: contextList(top.slice(0, cfg.TOP_K)),
     meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length }),
   };
 }
