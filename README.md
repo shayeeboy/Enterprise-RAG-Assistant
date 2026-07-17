@@ -92,7 +92,7 @@ each with how it's verified and where the automated test lives:
 | Out-of-scope refusal | 100% of out-of-KB questions refused, none answered from irrelevant context | **100% (2/2)** | `npm run eval` |
 | Groundedness | every *answered* question carries ≥ 1 valid citation | **100% grounded** (live) | observability · `/stats` |
 | Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
-| Latency | p50 / p95 tracked and visible | p50 ~16.9s / p95 ~23.7s | observability · `/stats` |
+| Latency | p50 / p95 tracked and visible | tracked live — see [Live observability](#live-observability) | observability · `/stats` |
 | Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
 | Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **76%** (hallucination 24%) | `npm run eval:judge` |
 | Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **3.06 / 5** | `npm run eval:judge` |
@@ -180,6 +180,8 @@ _Auto-updated from **35** logged queries · last refresh 2026-07-15._
 | Metric | Value |
 |---|---|
 | Total queries | 35 |
+| — real traffic (live) | 35 |
+| — benchmark traffic (automated) | 0 |
 | Grounded (cited) | 100% |
 | Avg latency | 13,059 ms |
 | p50 / p95 latency | 6,754 / 29,451 ms |
