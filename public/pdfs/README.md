@@ -14,6 +14,16 @@ each answer's **Sources** list links straight to the passage it cited.
 Filenames must be **lowercase `.pdf`** and match the `source_url` in `documents`
 (GitHub Pages is case-sensitive).
 
+## Attribution & license
+
+- **_Fundamentals of Piano Practice_ — Chuan C. Chang.** Redistributed here under
+  the author's own terms: *"Copyright © 2009. Copy permitted if author's name,
+  Chuan C. Chang, and this copyright statement are included."* Official source:
+  <http://www.pianopractice.org/>; this edition via
+  [gmoe/piano_fundamentals](https://github.com/gmoe/piano_fundamentals) (Read the
+  Docs). The hosted PDF retains the book's own copyright page.
+- **_The Virtuoso Pianist, Part I_ — C. L. Hanon (1873).** Public domain.
+
 ## ⚠️ Use the EXACT files that were ingested
 
 The stored page numbers come from `pdftotext`'s page indexing of the specific
