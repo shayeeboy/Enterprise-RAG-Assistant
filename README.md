@@ -86,15 +86,15 @@ each with how it's verified and where the automated test lives:
 | Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
 | Latency | p50 / p95 tracked and visible | p50 ~16.9s / p95 ~23.7s | observability · `/stats` |
 | Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
-| Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **75%** (hallucination 25%) | `npm run eval:judge` |
-| Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **3.08 / 5** | `npm run eval:judge` |
-| Semantic Hit@5 (LLM-judge) | top chunks semantically contain the answer (not keyword match) | **83% (10/12)** | `npm run eval:judge` |
+| Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **76%** (hallucination 24%) | `npm run eval:judge` |
+| Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **3.06 / 5** | `npm run eval:judge` |
+| Semantic Hit@5 (LLM-judge) | top chunks semantically contain the answer (not keyword match) | **71% (12/17)** | `npm run eval:judge` |
 
 **Now measured (Phase 4 — [LLM-Judge evaluation](#phase-4-llm-judge-evaluation)):**
 a deterministic LLM-judge now scores true hallucination rate, answer correctness
 (vs golden answers), and a *semantic* Hit@5 — closing the two honest gaps that
-previously needed human judgement. Reference run: **faithfulness 75%,
-correctness 3.08 / 5, semantic Hit@5 83%, refusal 100%** — deliberately honest
+previously needed human judgement. Reference run: **faithfulness 76%,
+correctness 3.06 / 5, semantic Hit@5 71%, refusal 40%** — deliberately honest
 "in progress" numbers that surfaced real weaknesses the keyword proxy hid (it
 had reported Hit@5 100%). Still N/A: there is no response cache, so "cache hit
 rate" doesn't apply.
@@ -140,7 +140,7 @@ and swappable.
 | [**Phase 1 — Ingestion**](#phase-1-ingestion) | PDFs → parse → chunk → metadata → local embeddings → Neon pgvector | 985 chunks indexed, fully offline, no API key |
 | [**Phase 2 — Query-time assistant**](#phase-2-query-time-assistant) | 13-step RAG workflow: rewrite → hybrid search → rerank → LLM → citations → guardrails | grounded, cited answers; CLI + API + chat UI |
 | [**Phase 3 — Hosting & observability**](#phase-3-hosting-and-observability) | deploy-ready hardening, LLM moved to Groq free tier, per-request tracing | **~252 s → ~11 s** at **$0** (see below) |
-| [**Phase 4 — LLM-Judge evaluation**](#phase-4-llm-judge-evaluation) | deterministic judge scores faithfulness, answer-correctness, and semantic Hit@5 vs golden answers | closes the human-judgment gaps; faithfulness 75%, correctness 3.08/5, refusal 100%, $0 |
+| [**Phase 4 — LLM-Judge evaluation**](#phase-4-llm-judge-evaluation) | deterministic judge scores faithfulness, answer-correctness, and semantic Hit@5 vs golden answers | closes the human-judgment gaps; faithfulness 76%, correctness 3.06/5, refusal 40%, $0 |
 
 **Knowledge base (this build):**
 
@@ -630,7 +630,9 @@ Out-of-scope questions are checked separately for correct **refusal**.
   sliding-window limiter paces calls under the model's tokens-per-minute cap.
 - **Faithful generation:** answers are generated at **temperature 0** and passed
   through a **citation-grounding trim** (`ENFORCE_CITATIONS`) that drops
-  substantive sentences citing no source — both target the faithfulness metric.
+  substantive sentences citing no source; an optional local **NLI entailment
+  filter** (`ENFORCE_ENTAILMENT`) can additionally drop sentences the retrieved
+  context doesn't entail — all targeting the faithfulness metric.
 - **Ground truth:** **17** golden answers written from the corpus itself
   ([`eval/ground_truth.json`](eval/ground_truth.json)) plus **5** out-of-scope
   cases, including adversarial near-misses (piano-adjacent but uncovered — piano
@@ -640,37 +642,36 @@ Out-of-scope questions are checked separately for correct **refusal**.
 
 | Honest gap (before) | Action taken (Phase 4) | Outcome |
 |---|---|---|
-| Hallucination rate + answer correctness were **not measured** — they needed human judgement | Deterministic LLM-judge scores faithfulness (answer ⊂ context) and correctness (0–5 vs golden answers) | Now measured every run: **faithfulness 75%, mean correctness 3.08 / 5** |
-| Hit@5 was a **keyword-match proxy** (reported 100%) that can't tell real substance from a coincidental word | Judge re-scores Hit@5 **semantically** against the golden answer | Honest **semantic Hit@5 83% (10/12)** — the proxy was over-optimistic |
+| Hallucination rate + answer correctness were **not measured** — they needed human judgement | Deterministic LLM-judge scores faithfulness (answer ⊂ context) and correctness (0–5 vs golden answers) | Now measured every run: **faithfulness 76%, mean correctness 3.06 / 5** |
+| Hit@5 was a **keyword-match proxy** (reported 100%) that can't tell real substance from a coincidental word | Judge re-scores Hit@5 **semantically** against the golden answer | Honest **semantic Hit@5 71% (12/17)** — the proxy was over-optimistic |
 | No answer-quality regression signal in CI | `eval:judge` added to the gated CI job with regression floors (refusal floor is a hard 100%) | Build fails on a genuine quality regression, not on normal run-to-run noise |
 
 ### Results (reference run)
 
 Generator `llama-3.3-70b-versatile`, judge `openai/gpt-oss-120b` (temp 0),
-over 12 answerable + 2 out-of-scope questions:
+over 17 answerable + 5 out-of-scope questions:
 
 | Metric | Result | Near-term goal | Met? |
 |---|---|---|---|
-| Faithfulness (no hallucination) | **75%** (hallucination 25%) | ≥ 85% | ✗ in progress |
-| Mean answer correctness | **3.08 / 5** | ≥ 3.6 | ✗ in progress |
-| Semantic Hit@5 | **83%** (10/12) | ≥ 90% | ✗ in progress |
-| Out-of-scope refusal | **100%** (2/2) | 100% | ✓ |
+| Faithfulness (no hallucination) | **76%** (hallucination 24%) | ≥ 85% | ✗ in progress |
+| Mean answer correctness | **3.06 / 5** | ≥ 3.6 | ✗ in progress |
+| Semantic Hit@5 | **71%** (12/17) | ≥ 90% | ✗ in progress |
+| Out-of-scope refusal | **40%** (2/5) | 100% | ✗ in progress |
 
 The judge **surfaced real problems the keyword eval hid** — that is the point.
-Faithfulness and correctness are honest "in progress" numbers, not a
-green-washed 100%. From the first run to this one, fixing a harness bug and
-tightening the generation prompt moved faithfulness **67% → 75%** and correctness
-**2.67 → 3.08** while holding out-of-scope refusal at 100% (see *Lessons
-learned*). CI gates on **regression floors** set below this baseline, so the
-build stays green at current quality and only a real regression fails it.
-
-> **⚠️ Numbers pending refresh.** These figures are from the initial
-> **12-question** run at generation temp 0.2, *before* the faithfulness work in
-> the roadmap below. The judged set is now **17 answerable + 5 out-of-scope**,
-> generation is **temperature 0** with a citation-grounding trim, and the
-> near-term goals are raised — re-run `npm run eval:judge` once the Groq
-> free-tier daily token quota resets to measure the expanded set with these
-> changes.
+None of these are a green-washed 100%. The original **12-question** run (temp
+0.2, before the faithfulness work below) moved faithfulness **67% → 75%** and
+correctness **2.67 → 3.08** while holding out-of-scope refusal at 100% (see
+*Lessons learned*). This run measures the **expanded 17 + 5 set** with
+temperature-0 generation and the citation-grounding trim in place — and it's
+exactly the expanded set that moved Hit@5 and refusal: the **5** out-of-scope
+questions now include adversarial near-misses (piano history, self-tuning,
+jazz improv) that the old 2-question set never tested, and 3 of them get
+answered instead of refused. CI's **regression floors** (looser than the
+near-term goals above: hallucination ≤ 34%, correctness ≥ 2.7, Hit@5 ≥ 75%,
+refusal = 100%) are **currently not met** — Hit@5 and refusal both fall short —
+so this is a tracked, visible regression on the harder set, not a silent one.
+See the roadmap below for the fix path.
 
 ### Improvement roadmap
 
@@ -680,10 +681,10 @@ most of it directly motivated by what the judge's reasoning traces flagged.
 
 | Metric | Current | Near-term | Stretch | How to get there |
 |---|---|---|---|---|
-| Faithfulness (no hallucination) | 75% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation + a citation-grounding trim (`ENFORCE_CITATIONS`) that drops substantive sentences citing no source. **Next:** a per-sentence **entailment (NLI) check**; harden the grounding prompt ("state only what a source explicitly says — never infer"); raise the rerank threshold so marginal chunks don't tempt the model. |
-| Answer correctness (0–5) | 3.08 | ≥ 3.6 | ≥ 4.2 | Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
-| Semantic Hit@5 | 83% | ≥ 90% | ≥ 95% | **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
-| Out-of-scope refusal | 100% | 100% (hold) | 100% (hold) | Keep the **hard-100% CI floor**; grow the out-of-scope set with **adversarial near-misses** (piano-adjacent but uncovered) so a future prompt change can't silently regress it. |
+| Faithfulness (no hallucination) | 76% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation; a citation-grounding trim (`ENFORCE_CITATIONS`); and a local **NLI entailment filter** (`ENFORCE_ENTAILMENT`, opt-in) that drops answer sentences the retrieved context doesn't entail. **Next:** tune the NLI threshold against the eval — strict sentence-level NLI is aggressive on synthesized sentences, so it's off by default until its effect is measured; harden the grounding prompt ("state only what a source explicitly says — never infer"). |
+| Answer correctness (0–5) | 3.06 | ≥ 3.6 | ≥ 4.2 | Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
+| Semantic Hit@5 | 71% | ≥ 90% | ≥ 95% | **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
+| Out-of-scope refusal | 40% | 100% | 100% (hold) | ✗ **regressed** on the expanded set — the new **adversarial near-misses** (piano history, self-tuning, jazz improv) exposed over-eager scope creep the old 2-question set never tested. **Next:** harden the refusal boundary in the prompt/guardrails for piano-adjacent-but-uncovered topics; re-measure before calling this a hold again. |
 | Eval confidence | 22 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | ✅ **shipped:** grew the set 14 → 22 (17 answerable + 5 out-of-scope, incl. adversarial near-misses). **Next:** report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
 
 **Enabler:** larger, repeated eval runs need headroom beyond the Groq free
