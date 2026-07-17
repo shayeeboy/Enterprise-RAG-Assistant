@@ -141,12 +141,13 @@ rate" doesn't apply.
 answer's citations be **clickable and open the source at the exact page**, not
 just name a book and page. Delivered as a **Phase 2 + Phase 3** enhancement: the
 answer path attaches a per-citation deep link (`source_url#page=N`) to every
-citation ([Phase 2](#phase-2-query-time-assistant)), and the two source PDFs are
+citation ([Phase 2](#phase-2-query-time-assistant)), and the source PDFs are
 **self-hosted on the GitHub Pages site** with the chat UI rendering the
 **Sources** list as links that open the cited page in a new tab
-([Phase 3](#phase-3-hosting-and-observability)). Page numbers come from the
-ingested PDFs, so hosting those exact files keeps `#page=N` aligned. (Drop the
-two PDFs into [`public/pdfs/`](public/pdfs/) to take it fully live.)
+([Phase 3](#phase-3-hosting-and-observability)). *Fundamentals of Piano Practice*
+is live and **page-verified** (`#page=N` matches the ingested pages); the Hanon
+deep-link is pending the exact ingested file (a different edition was first
+supplied), so Hanon citations render as plain text until then.
 
 ### How it works
 
@@ -622,16 +623,18 @@ covers DB + LLM health):
 
 ### Enhancement — clickable citations (self-hosted PDFs + UI, from feedback)
 
-The two source PDFs are **self-hosted** from [`public/pdfs/`](public/pdfs/)
-(served by GitHub Pages), and the chat UI renders each answer's **Sources** as
-links that open the cited page — `source_url#page=N` — in a new tab
-(`target="_blank" rel="noopener noreferrer"`), falling back to plain text when a
-document has no URL. Hosting the **exact ingested PDFs** keeps the `#page=N`
-fragment aligned with the stored page numbers (which come from `pdftotext`'s page
-indexing of those files); `#page=` is honored by browsers' built-in PDF viewers
-for a directly-served `application/pdf`. Backend half in
-[Phase 2](#phase-2-query-time-assistant). _Going live needs the two PDF files
-dropped into `public/pdfs/` and a Cloud Run redeploy for the API change._
+The source PDFs are **self-hosted** from [`public/pdfs/`](public/pdfs/) (served
+by GitHub Pages), and the chat UI renders each answer's **Sources** as links that
+open the cited page — `source_url#page=N` — in a new tab (`target="_blank"
+rel="noopener noreferrer"`), falling back to plain text when a document has no
+URL. Hosting the **exact ingested PDF** keeps `#page=N` aligned with the stored
+page numbers (from `pdftotext`'s indexing of that file); an
+[alignment check](public/pdfs/README.md) confirmed *Fundamentals* matches at
+offset 0 (~1.0 text overlap on sampled pages). `#page=` is honored by browsers'
+built-in PDF viewers for a directly-served `application/pdf`. Backend half in
+[Phase 2](#phase-2-query-time-assistant). _Two follow-ups: the correct 21-page
+Hanon file (a different edition was first supplied, so its link is disabled for
+now), and a Cloud Run redeploy so the live API returns the `url` field._
 
 [↑ Back to top](#executive-summary)
 

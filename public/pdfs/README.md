@@ -4,15 +4,15 @@ Citations in the assistant deep-link to the exact page of the source PDF using
 `source_url#page=N`. Those PDFs are served from this folder by GitHub Pages, so
 each answer's **Sources** list links straight to the passage it cited.
 
-## Add the two PDFs here
+## Status
 
-Drop the two source PDFs in this folder with these **exact** filenames (they
-must match the `source_url` values stored in the `documents` table):
-
-| File | Document | Served at |
+| File | Document | Status |
 |---|---|---|
-| `fundamentals-of-piano-practice.pdf` | *Fundamentals of Piano Practice* — Chuan C. Chang | `…/pdfs/fundamentals-of-piano-practice.pdf` |
-| `hanon-virtuoso-pianist-pt1.pdf` | *The Virtuoso Pianist, Part I* — C. L. Hanon | `…/pdfs/hanon-virtuoso-pianist-pt1.pdf` |
+| `fundamentals-of-piano-practice.pdf` | *Fundamentals of Piano Practice* — Chuan C. Chang | ✅ **present & page-verified** — `#page=N` matches the ingested pages (offset 0, ~1.0 text overlap on sampled pages). Live. |
+| `hanon-virtuoso-pianist-pt1.pdf` | *The Virtuoso Pianist, Part I* — C. L. Hanon | ⚠️ **needed** — the copy first supplied was a **different 117-page edition** whose text matched **none** of our 21 ingested pages, so its `#page=N` would be wrong. It was removed and Hanon's `source_url` set to NULL (citations show as plain text). Add the **exact 21-page file that was ingested** (`virtuoso-pianist-pt1-a4.PDF`), then re-run the alignment check and set `source_url`. |
+
+Filenames must be **lowercase `.pdf`** and match the `source_url` in `documents`
+(GitHub Pages is case-sensitive).
 
 ## ⚠️ Use the EXACT files that were ingested
 
