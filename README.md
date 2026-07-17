@@ -60,19 +60,21 @@ to an enterprise KB, not the piano content itself.
 - **System health (measured, live):** latency (p50/p95), token cost, and
   "grounded rate" (does every answer carry a citation) — tracked per
   request via built-in observability and persisted to a searchable Neon
-  table. Current numbers: 100% grounded, p50 latency ~16.9s / p95 ~23.7s,
-  $0 LLM cost (Groq free tier). **Honest caveat:** this is based on 3
-  logged queries so far — real signal on system behavior, not yet
-  statistically meaningful usage evidence.
+  table. Current numbers: 100% grounded, $0 LLM cost (Groq free tier), with
+  latency p50/p95 tracked live — see [Live observability](#live-observability)
+  for the auto-updated figures. **Honest caveat:** still a modest number of
+  logged queries — real signal on system behavior, not yet statistically
+  meaningful usage evidence.
 - **Retrieval quality (first-pass eval, now measured):** "grounded" only
   confirms an answer *has* a citation, not that it's the *right* passage.
   A small labeled set (`eval/questions.json`, run via `npm run eval`)
   measures Hit@5 / MRR and out-of-scope refusal against the live index —
   currently **Hit@5 100% (8/8), MRR 0.938, refusal 100% (2/2)**. Caveat:
   relevance is a keyword proxy over 10 questions, so this is a regression
-  signal, not human-judged ground truth; a larger judged set (plus
-  answer-correctness / hallucination-rate via an LLM judge) is the
-  stronger next step.
+  signal, not human-judged ground truth — which is exactly why
+  [Phase 4](#phase-4-llm-judge-evaluation) now adds a deterministic LLM-judge
+  for answer correctness, hallucination rate, and a *semantic* Hit@5 over a
+  larger golden set.
 
 **Acceptance criteria (retrieval quality).** Concrete, checkable targets —
 each with how it's verified and where the automated test lives:
@@ -827,11 +829,11 @@ resolved them.
 
 | Issue | Resolution / lesson |
 |---|---|
-| The keyword eval reported a reassuring Hit@5 100% | A semantic LLM-judge showed the honest picture: Hit@5 83%, faithfulness 75%, correctness ~3/5. A proxy that only checks for a keyword can't see whether the *answer* is right — measure the answer, not just the retrieval. |
+| The keyword eval reported a reassuring Hit@5 100% | A semantic LLM-judge showed the honest picture (currently Hit@5 71%, faithfulness 76%, correctness ~3/5). A proxy that only checks for a keyword can't see whether the *answer* is right — measure the answer, not just the retrieval. |
 | Judge falsely flagged hallucinations on `[6]` citations | The judge saw only the top-5 chunks while the generator prompts with top-6, so valid citations to `[6]` were scored as fabrications. The judge's *own reasoning traces* exposed the bug. Fixed by showing the judge the exact top-K the generator used — the judge must see precisely what the model saw. |
 | Making answers more complete broke refusal (100% → 50%) | A "cover the key points" prompt made the model stretch an unrelated chunk into an answer for "capital of France." Scoping completeness to in-scope questions and re-emphasizing refusal restored it to 100%. Completeness and refusal pull in opposite directions — tune for both, and measure both. |
 | Groq free-tier **daily token cap** hit mid-iteration | Five eval runs exhausted the generator's 100k-tokens/day limit; the pipeline swallowed the 429 and returned an error string, which the judge scored as 0 — silent garbage. Hardened the harness to **abort loudly** on a rate-limited generation, and made `eval/judge-results.json` a regenerable, gitignored artifact. |
-| An LLM judge is not perfectly deterministic | Even at temperature 0 the judge flipped a few individual verdicts between runs (the aggregate Hit@5 held at 83%). Treat the judge as a strong signal, not an oracle: report aggregates, gate CI on generous **regression floors**, and keep the fast keyword eval as a cheap complement. |
+| An LLM judge is not perfectly deterministic | Even at temperature 0 the judge flipped a few individual verdicts between runs while the aggregate stayed steady. Treat the judge as a strong signal, not an oracle: report aggregates, gate CI on generous **regression floors**, and keep the fast keyword eval as a cheap complement. |
 | Strict sentence-level NLI is aggressive | A local NLI entailment filter scores clean pairs correctly (≈0.97 entailed vs ≈0.00 unrelated), but real answer sentences that fold a supported fact into a light recommendation ("…so don't force it") score low and get flagged as unsupported. Shipped it **opt-in** (`ENFORCE_ENTAILMENT`, default off), with citation markers stripped before scoring and a safety net that never guts an answer — but the threshold needs tuning against the eval before it belongs in the default path. Build the mechanism, verify it, then measure before trusting it. |
 | Adversarial near-misses defeat a score threshold | The expanded set's near-misses (piano history, self-tuning, jazz) score **as high on the reranker as valid questions** (0.97–1.0) — their chunks are topically piano-related — so no relevance-floor value separates them from thin-coverage in-scope questions (0.04–0.29). Fixed with an **answerability gate**: a focused LLM YES/NO on whether the chunks actually answer *this* question, kept separate from the "be helpful" generation step (which kept rationalizing an answer). Also: validate on the **real pipeline path** — an early test skipped query-rewrite and mis-measured the gate, because rewrite changes which chunks it sees. Lesson: topical relevance ≠ answerability; that judgement needs an LLM, not a score. |
 
