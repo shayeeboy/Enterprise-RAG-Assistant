@@ -14,6 +14,7 @@ const { validateInput, groundingGuard, enforceCitations, REFUSAL } = require("./
 const { rewriteQuery } = require("./rewrite");
 const { hybridRetrieve } = require("./retrieve");
 const { rerank } = require("./rerank");
+const { enforceEntailment } = require("./nli");
 const { buildMessages } = require("./prompt");
 const { chat } = require("./llm");
 const { newTrace, span, addTokens, finalize } = require("./trace");
@@ -147,6 +148,19 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
     uncitedDropped = trimmed.dropped;
   }
 
+  // 11b. NLI faithfulness filter (opt-in) — drop claims the context doesn't
+  // entail (catches cited-but-unsupported statements). Non-fatal on failure.
+  let unentailedDropped = 0;
+  if (cfg.ENFORCE_ENTAILMENT) {
+    try {
+      const e = await span(trace, "entailment", () => enforceEntailment(answer, top, { threshold: cfg.ENTAILMENT_THRESHOLD }));
+      answer = e.text;
+      unentailedDropped = e.dropped;
+    } catch {
+      /* keep the answer as-is if the NLI model/inference fails */
+    }
+  }
+
   // 12. Citations → Grounding guardrail
   const { grounded, citations } = groundingGuard(answer, top);
   const finalAnswer = grounded
@@ -161,7 +175,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
     citations,
     sources: sourceList(top),
     contexts: contextList(top.slice(0, cfg.TOP_K)),
-    meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length, uncitedDropped }),
+    meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length, uncitedDropped, unentailedDropped }),
   };
 }
 

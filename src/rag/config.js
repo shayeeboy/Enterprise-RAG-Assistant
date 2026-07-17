@@ -48,6 +48,14 @@ module.exports = {
   // citation (a claim with no source) to raise faithfulness. Conservative:
   // keeps lead-ins, refusals, and never trims an answer down to nothing.
   ENFORCE_CITATIONS: bool(process.env.ENFORCE_CITATIONS, true),
+  // Opt-in NLI faithfulness filter: a local cross-encoder checks whether the
+  // retrieved context ENTAILS each answer sentence, dropping claims it doesn't
+  // (catches cited-but-unsupported statements the citation trim can't). Off by
+  // default — it adds a model download + latency and its impact should be
+  // measured via `npm run eval:judge` before enabling in production.
+  ENFORCE_ENTAILMENT: bool(process.env.ENFORCE_ENTAILMENT, false),
+  NLI_MODEL: process.env.NLI_MODEL || "Xenova/nli-deberta-v3-small",
+  ENTAILMENT_THRESHOLD: num(process.env.ENTAILMENT_THRESHOLD, 0.4), // min P(entailment) to keep a claim
 
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),

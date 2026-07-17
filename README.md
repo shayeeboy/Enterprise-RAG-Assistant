@@ -736,6 +736,7 @@ Enterprise-RAG-Assistant/
 │   ├── rewrite.js  embed.js  retrieve.js  rerank.js
 │   ├── prompt.js   llm.js     guardrails.js  trace.js
 │   ├── judge.js               ← Phase 4 LLM-as-Judge (rubric, XML I/O, JSON parse)
+│   ├── nli.js                 ← local NLI entailment faithfulness filter (opt-in)
 │   ├── db.js                  ← pooled Neon connection
 │   └── config.js              ← env-driven, free/local defaults
 ├── server.js                 ← API + chat UI (CORS, rate limit, access code)
@@ -758,6 +759,7 @@ Enterprise-RAG-Assistant/
 | DB driver | `pg` (node-postgres) | Standard, well-supported Postgres client for Node |
 | Hybrid search | pgvector cosine + Postgres full-text, fused with RRF | Combines semantic + keyword recall, no extra service |
 | Reranking | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
+| Faithfulness filter | **Transformers.js** + `nli-deberta-v3-small` (local NLI cross-encoder, opt-in) | Checks the retrieved context entails each answer sentence; drops unsupported claims. Free, no key; `ENFORCE_ENTAILMENT` |
 | LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`llama-3.3-70b-versatile`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER` |
 | API + UI | Express + static chat page (`server.js`, `public/`) | CORS/rate-limit/access-code hardened; same Node stack throughout |
 | Backend hosting | **Google Cloud Run** (free tier, scale-to-zero) | Runs the Dockerfile unchanged at 1–4 GiB; chosen after HF Docker (paid) and Render (512 MB, too small) |
@@ -810,5 +812,6 @@ resolved them.
 | Making answers more complete broke refusal (100% → 50%) | A "cover the key points" prompt made the model stretch an unrelated chunk into an answer for "capital of France." Scoping completeness to in-scope questions and re-emphasizing refusal restored it to 100%. Completeness and refusal pull in opposite directions — tune for both, and measure both. |
 | Groq free-tier **daily token cap** hit mid-iteration | Five eval runs exhausted the generator's 100k-tokens/day limit; the pipeline swallowed the 429 and returned an error string, which the judge scored as 0 — silent garbage. Hardened the harness to **abort loudly** on a rate-limited generation, and made `eval/judge-results.json` a regenerable, gitignored artifact. |
 | An LLM judge is not perfectly deterministic | Even at temperature 0 the judge flipped a few individual verdicts between runs (the aggregate Hit@5 held at 83%). Treat the judge as a strong signal, not an oracle: report aggregates, gate CI on generous **regression floors**, and keep the fast keyword eval as a cheap complement. |
+| Strict sentence-level NLI is aggressive | A local NLI entailment filter scores clean pairs correctly (≈0.97 entailed vs ≈0.00 unrelated), but real answer sentences that fold a supported fact into a light recommendation ("…so don't force it") score low and get flagged as unsupported. Shipped it **opt-in** (`ENFORCE_ENTAILMENT`, default off), with citation markers stripped before scoring and a safety net that never guts an answer — but the threshold needs tuning against the eval before it belongs in the default path. Build the mechanism, verify it, then measure before trusting it. |
 
 [↑ Back to top](#executive-summary)

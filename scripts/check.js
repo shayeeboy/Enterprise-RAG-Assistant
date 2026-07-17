@@ -13,7 +13,7 @@ const path = require("path");
 const pass = (name) => console.log("[PASS] " + name);
 
 // 1. every module imports cleanly (catches syntax / bad require paths)
-const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge"];
+const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge", "nli"];
 mods.forEach((m) => require("../src/rag/" + m));
 pass(`all modules import (${mods.length})`);
 
@@ -101,5 +101,22 @@ assert.ok(/Do this:/.test(r2.text) && /\[1\]/.test(r2.text), "colon lead-in and 
 const refusalish = "I could not find an answer to that in the piano knowledge base, sorry.";
 assert.strictEqual(enforceCitations(refusalish, fchunks).text, refusalish, "all-uncited answer preserved (never gutted)");
 pass("faithfulness trim: enforceCitations");
+
+// 9. NLI faithfulness filter — pure logic (isClaim + trimByScore, no model)
+const { isClaim, trimByScore } = require("../src/rag/nli");
+assert.ok(isClaim("This is a substantive claim about piano technique and finger independence."), "long sentence is a claim");
+assert.ok(!isClaim("Do this:"), "colon lead-in is not a claim");
+assert.ok(!isClaim("- Keep going"), "short list item is not a claim");
+const nliAns = "Practice hands separately to build speed and control over the whole passage [1]. Some entirely unsupported claim that the context never states at all.";
+const nliScores = new Map([
+  ["Practice hands separately to build speed and control over the whole passage [1].", 0.9],
+  ["Some entirely unsupported claim that the context never states at all.", 0.05],
+]);
+const nliTrim = trimByScore(nliAns, (s) => (nliScores.has(s) ? nliScores.get(s) : null), { threshold: 0.4 });
+assert.ok(nliTrim.text.includes("[1]"), "entailed claim kept");
+assert.ok(!/unsupported claim/.test(nliTrim.text), "un-entailed claim dropped");
+assert.strictEqual(nliTrim.dropped, 1, "one un-entailed sentence dropped");
+assert.strictEqual(trimByScore(nliAns, () => null, { threshold: 0.4 }).dropped, 0, "unscored sentences are kept (safe default)");
+pass("NLI faithfulness filter: isClaim + trimByScore");
 
 console.log("\nAll wiring + logic checks passed.");
