@@ -57,6 +57,13 @@ module.exports = {
   NLI_MODEL: process.env.NLI_MODEL || "Xenova/nli-deberta-v3-small",
   ENTAILMENT_THRESHOLD: num(process.env.ENTAILMENT_THRESHOLD, 0.4), // min P(entailment) to keep a claim
 
+  // Answerability gate: a focused LLM YES/NO on whether the retrieved chunks
+  // actually address THIS question — catches "near-miss" out-of-scope questions
+  // (piano history, tuning, jazz) that score high on topical relevance but
+  // aren't covered, which the rerank threshold cannot separate. Fail-open.
+  ANSWERABILITY_GATE: bool(process.env.ANSWERABILITY_GATE, true),
+  GATE_MODEL: process.env.GATE_MODEL || "", // "" → reuse LLM_MODEL; set a smaller/faster model to offload
+
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
   HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 20), // pool size per search method

@@ -13,7 +13,7 @@ const path = require("path");
 const pass = (name) => console.log("[PASS] " + name);
 
 // 1. every module imports cleanly (catches syntax / bad require paths)
-const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge", "nli"];
+const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge", "nli", "gate"];
 mods.forEach((m) => require("../src/rag/" + m));
 pass(`all modules import (${mods.length})`);
 
@@ -118,5 +118,15 @@ assert.ok(!/unsupported claim/.test(nliTrim.text), "un-entailed claim dropped");
 assert.strictEqual(nliTrim.dropped, 1, "one un-entailed sentence dropped");
 assert.strictEqual(trimByScore(nliAns, () => null, { threshold: 0.4 }).dropped, 0, "unscored sentences are kept (safe default)");
 pass("NLI faithfulness filter: isClaim + trimByScore");
+
+// 10. Answerability gate — reply parsing (fail-open)
+const { parseGate } = require("../src/rag/gate");
+assert.strictEqual(parseGate("NO"), false, "NO → not answerable");
+assert.strictEqual(parseGate("no."), false, "lowercase no → not answerable");
+assert.strictEqual(parseGate("NO — different topic"), false, "NO with reason → not answerable");
+assert.strictEqual(parseGate("YES"), true, "YES → answerable");
+assert.strictEqual(parseGate("Yes, the sources cover this"), true, "YES with text → answerable");
+assert.strictEqual(parseGate(""), true, "empty reply → fail-open (answerable)");
+pass("answerability gate: parseGate (fail-open)");
 
 console.log("\nAll wiring + logic checks passed.");

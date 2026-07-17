@@ -15,6 +15,7 @@ const { rewriteQuery } = require("./rewrite");
 const { hybridRetrieve } = require("./retrieve");
 const { rerank } = require("./rerank");
 const { enforceEntailment } = require("./nli");
+const { isAnswerable } = require("./gate");
 const { buildMessages } = require("./prompt");
 const { chat } = require("./llm");
 const { newTrace, span, addTokens, finalize } = require("./trace");
@@ -120,6 +121,21 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
       contexts: contextList(top.slice(0, cfg.TOP_K)),
       meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length }),
     };
+  }
+
+  // 8b. Answerability gate — a focused LLM YES/NO on whether the top chunks
+  // actually answer THIS question. Catches near-miss out-of-scope questions
+  // (piano history, tuning, jazz) that score high on topical relevance but
+  // aren't covered, which the rerank floor can't separate. Fail-open.
+  if (cfg.ANSWERABILITY_GATE) {
+    const answerable = await span(trace, "gate", () => isAnswerable(question, top));
+    if (!answerable) {
+      return {
+        ok: true, grounded: false, answer: REFUSAL, citations: [], sources: [],
+        contexts: contextList(top.slice(0, cfg.TOP_K)),
+        meta: buildMeta(trace, { searchQuery, rewritten: rw.rewritten, retrieved: candidates.length, reranked: top.length, refusedBy: "gate" }),
+      };
+    }
   }
 
   // 9–10. Prompt Augmentation → LLM Reasoning
