@@ -57,30 +57,16 @@ and know when to say "I don't know." That pattern is what would transfer
 to an enterprise KB, not the piano content itself.
 
 **Success metric.** Two tiers, deliberately kept separate:
-- **System health (measured, live):** latency (p50/p95), token cost, and
-  "grounded rate" (does every answer carry a citation) — tracked per
-  request via built-in observability and persisted to a searchable Neon
-  table. Current numbers: 100% grounded, $0 LLM cost (Groq free tier), with
-  latency p50/p95 tracked live — see [Live observability](#live-observability).
-  **Making system-health statistically meaningful:** rather than wait for
-  organic traffic, an automated benchmark (`npm run bench` — a 120-question bank
-  run through the real pipeline, tagged `benchmark` and reported separately from
-  organic `live` queries) builds a large, controlled sample so the latency /
-  grounded-rate / cost figures rest on a real distribution, not a handful of
-  hits. It accumulates over nightly runs within the Groq free-tier daily cap
-  (the query count in [Live observability](#live-observability) reflects
-  progress). These are **test queries by design — not a claim of organic usage**;
-  that distinction is kept explicit in the count.
-- **Retrieval quality (first-pass eval, now measured):** "grounded" only
-  confirms an answer *has* a citation, not that it's the *right* passage.
-  A small labeled set (`eval/questions.json`, run via `npm run eval`)
-  measures Hit@5 / MRR and out-of-scope refusal against the live index —
-  currently **Hit@5 100% (8/8), MRR 0.938, refusal 100% (2/2)**. Caveat:
-  relevance is a keyword proxy over 10 questions, so this is a regression
-  signal, not human-judged ground truth — which is exactly why
-  [Phase 4](#phase-4-llm-judge-evaluation) now adds a deterministic LLM-judge
-  for answer correctness, hallucination rate, and a *semantic* Hit@5 over a
-  larger golden set.
+
+- **System health** — measured live, per request, via built-in observability persisted to a searchable Neon table.
+  - **Tracked:** latency (p50/p95), token cost, and "grounded rate" (does every answer carry a citation).
+  - **Current:** 100% grounded · $0 LLM cost (Groq free tier) · latency tracked live — see [Live observability](#live-observability).
+  - **Made statistically meaningful:** an automated benchmark (`npm run bench`, a 120-question bank) drives realistic queries through the real pipeline, so the figures rest on a large sample rather than a handful of hits.
+  - **Kept honest:** benchmark traffic is tagged and counted separately from organic `live` queries — test traffic by design, not a claim of real-world usage.
+- **Retrieval quality** — because "grounded" only confirms an answer *has* a citation, not that it cites the *right* passage.
+  - **First-pass (keyword eval, `npm run eval`):** Hit@5 100% (8/8) · MRR 0.938 · out-of-scope refusal 100% (2/2).
+  - **Caveat:** relevance is a keyword proxy over 10 questions — a regression signal, not human-judged ground truth.
+  - **Deeper (Phase 4 LLM-judge, `npm run eval:judge`):** a deterministic judge scores answer correctness, hallucination rate, and a *semantic* Hit@5 over a larger golden set — see [Phase 4](#phase-4-llm-judge-evaluation).
 
 **Acceptance criteria (retrieval quality).** Concrete, checkable targets —
 each with how it's verified and where the automated test lives:
