@@ -58,7 +58,7 @@ done
 git clone https://github.com/shayeeboy/Enterprise-RAG-Assistant && cd Enterprise-RAG-Assistant
 gcloud run deploy rag-assistant \
   --source . --region us-central1 \
-  --memory 2Gi --cpu 1 --timeout 600 --min-instances 0 \
+  --memory 4Gi --cpu 2 --timeout 600 --min-instances 0 \
   --allow-unauthenticated \
   --set-env-vars LLM_PROVIDER=openai-compatible,LLM_BASE_URL=https://api.groq.com/openai/v1,LLM_MODEL=llama-3.3-70b-versatile,ALLOWED_ORIGINS=https://shayeeboy.github.io \
   --set-secrets DATABASE_URL=rag-database-url:latest,LLM_API_KEY=rag-groq-key:latest
@@ -66,7 +66,34 @@ gcloud run deploy rag-assistant \
 
 Cloud Run prints a **Service URL** (`https://rag-assistant-xxxxx-uc.a.run.app`).
 Use it as the `?api=` value. First request after a cold start is slow (~1–2 min)
-while the embedding + reranker models download into the container.
+while the embedding + reranker models download into the container. (Use **4 GiB**:
+Cloud Run's filesystem is in-memory, so the runtime model download counts against
+RAM — 2 GiB OOM-kills the first `/ask`.)
+
+### Redeploying an existing service
+
+Once the service, secrets, and IAM exist, shipping new code is **one command**.
+`gcloud run deploy --source` rebuilds the Dockerfile and rolls out a new revision
+while **preserving** the current memory/CPU, secrets, and env vars — only pass a
+flag to change one:
+
+```bash
+gcloud config set project enterprise-rag-assistant-api
+rm -rf Enterprise-RAG-Assistant
+git clone https://github.com/shayeeboy/Enterprise-RAG-Assistant && cd Enterprise-RAG-Assistant
+gcloud run deploy rag-assistant --source . --region us-central1
+```
+
+Verify the new revision (health, plus a behaviour check — e.g. that citations now
+return a PDF deep link):
+
+```bash
+BE=https://rag-assistant-694391756200.us-central1.run.app
+curl -s "$BE/health"
+curl -s -X POST "$BE/ask" -H 'Content-Type: application/json' \
+  -d '{"question":"What should I do about a weak 4th finger?"}' \
+  | grep -o '\.pdf#page=[0-9]*'
+```
 
 ### Alternative: Hugging Face Spaces (Docker) — 16 GB RAM free
 
