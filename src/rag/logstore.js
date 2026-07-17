@@ -29,8 +29,11 @@ CREATE TABLE IF NOT EXISTS query_logs (
   tokens_total        INTEGER,
   cost_usd            NUMERIC(12,6),
   error               TEXT,
+  source              TEXT,          -- 'live' (organic) | 'benchmark' (automated test traffic)
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Backward-compatible migration for tables created before the source column.
+ALTER TABLE query_logs ADD COLUMN IF NOT EXISTS source TEXT;
 CREATE INDEX IF NOT EXISTS query_logs_created_at_idx ON query_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS query_logs_trace_idx ON query_logs (trace_id);
 CREATE INDEX IF NOT EXISTS query_logs_question_fts_idx
@@ -45,7 +48,7 @@ async function ensureSchema() {
   return _ensured;
 }
 
-async function logQuery(question, result) {
+async function logQuery(question, result, source = "live") {
   const m = (result && result.meta) || {};
   const L = m.latencyMs || {};
   const T = m.tokens || {};
@@ -55,15 +58,15 @@ async function logQuery(question, result) {
       `INSERT INTO query_logs
         (trace_id, question, search_query, rewritten, grounded, ok, retrieved, reranked, citations,
          provider, model, latency_total_ms, latency_rewrite_ms, latency_retrieve_ms, latency_rerank_ms,
-         latency_llm_ms, tokens_prompt, tokens_completion, tokens_total, cost_usd, error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+         latency_llm_ms, tokens_prompt, tokens_completion, tokens_total, cost_usd, error, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
       [
         m.traceId || null, question, m.searchQuery || null, !!m.rewritten, !!(result && result.grounded),
         result ? result.ok !== false : false, m.retrieved ?? null, m.reranked ?? null,
         (result && result.citations ? result.citations.length : 0),
         m.provider || null, m.model || null, L.total ?? null, L.rewrite ?? null, L.retrieve ?? null,
         L.rerank ?? null, L.llm ?? null, T.prompt ?? null, T.completion ?? null, T.total ?? null,
-        m.costUsd ?? 0, m.error || null,
+        m.costUsd ?? 0, m.error || null, source || "live",
       ]
     );
   } catch (e) {
@@ -76,6 +79,8 @@ async function getStats() {
   const { rows } = await query(`
     SELECT
       count(*)::int AS total,
+      count(*) FILTER (WHERE coalesce(source,'live')='benchmark')::int AS benchmark_count,
+      count(*) FILTER (WHERE coalesce(source,'live')<>'benchmark')::int AS live_count,
       count(*) FILTER (WHERE grounded)::int AS grounded_count,
       count(*) FILTER (WHERE error IS NOT NULL)::int AS error_count,
       round(avg(latency_total_ms))::int    AS avg_latency_ms,

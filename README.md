@@ -61,10 +61,16 @@ to an enterprise KB, not the piano content itself.
   "grounded rate" (does every answer carry a citation) — tracked per
   request via built-in observability and persisted to a searchable Neon
   table. Current numbers: 100% grounded, $0 LLM cost (Groq free tier), with
-  latency p50/p95 tracked live — see [Live observability](#live-observability)
-  for the auto-updated figures. **Honest caveat:** still a modest number of
-  logged queries — real signal on system behavior, not yet statistically
-  meaningful usage evidence.
+  latency p50/p95 tracked live — see [Live observability](#live-observability).
+  **Making system-health statistically meaningful:** rather than wait for
+  organic traffic, an automated benchmark (`npm run bench` — a 120-question bank
+  run through the real pipeline, tagged `benchmark` and reported separately from
+  organic `live` queries) builds a large, controlled sample so the latency /
+  grounded-rate / cost figures rest on a real distribution, not a handful of
+  hits. It accumulates over nightly runs within the Groq free-tier daily cap
+  (the query count in [Live observability](#live-observability) reflects
+  progress). These are **test queries by design — not a claim of organic usage**;
+  that distinction is kept explicit in the count.
 - **Retrieval quality (first-pass eval, now measured):** "grounded" only
   confirms an answer *has* a citation, not that it's the *right* passage.
   A small labeled set (`eval/questions.json`, run via `npm run eval`)

@@ -17,6 +17,7 @@
     "smoke": "node scripts/smoke.js",
     "eval": "node scripts/eval.js",
     "eval:judge": "node scripts/eval-judge.js",
+    "bench": "node scripts/bench.js",
     "logs": "node scripts/logs.js",
     "stats": "node scripts/stats-readme.js"
   },

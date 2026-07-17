@@ -129,4 +129,12 @@ assert.strictEqual(parseGate("Yes, the sources cover this"), true, "YES with tex
 assert.strictEqual(parseGate(""), true, "empty reply → fail-open (answerable)");
 pass("answerability gate: parseGate (fail-open)");
 
+// 11. Observability benchmark question bank
+const { buildBank } = require("../eval/bench-questions");
+const bank = buildBank();
+assert.ok(Array.isArray(bank) && bank.length >= 100, "benchmark bank should have >= 100 questions");
+assert.strictEqual(new Set(bank).size, bank.length, "benchmark questions must be unique");
+assert.ok(bank.every((q) => typeof q === "string" && q.trim().endsWith("?")), "every benchmark item is a question");
+pass(`observability benchmark bank (${bank.length} questions)`);
+
 console.log("\nAll wiring + logic checks passed.");

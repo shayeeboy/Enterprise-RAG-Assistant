@@ -21,6 +21,7 @@ const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
       ? "_No queries logged yet — be the first: **[try the live demo](#try-it-live)**, then this table auto-updates._"
       : [
           `_Auto-updated from **${fmt(total)}** logged queries` +
+            (s.benchmark_count ? ` (${fmt(s.live_count)} live + ${fmt(s.benchmark_count)} automated benchmark)` : "") +
             (s.last_at ? ` · last refresh ${new Date(s.last_at).toISOString().slice(0, 10)}` : "") +
             "._",
           "",
