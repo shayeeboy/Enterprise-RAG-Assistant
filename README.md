@@ -658,6 +658,24 @@ over 17 answerable + 5 out-of-scope questions:
 | Semantic Hit@5 | **71%** (12/17) | ≥ 90% | ✗ in progress |
 | Out-of-scope refusal | **40%** (2/5) | 100% | ✗ in progress |
 
+**Is this a regression from the previous run? No — the benchmark got harder.**
+Isolating *this* run to the **same 12 questions** the previous run used shows the
+system held or improved; the lower headline is entirely the 5 new (harder)
+questions and the 3 new adversarial-refusal near-misses:
+
+| Metric | Prev run · 12 Q | This run · **same 12 Q** | This run · **new 5 Q** | This run · all 17 |
+|---|---|---|---|---|
+| Faithfulness | 75% | **83%** ↑ | 60% | 76% |
+| Correctness | 3.08 | **3.17** ↑ | 2.80 | 3.06 |
+| Semantic Hit@5 | 83% | **83%** = | 40% | 71% |
+
+On the identical set the system is flat-to-better (temp-0 + citation trim nudged
+faithfulness up). The new answerable questions have weaker corpus coverage and
+more comprehensive golden answers, and refusal fell because the 3 adversarial
+near-misses (piano history, self-tuning, jazz) were added — 2/2 easy out-of-scope
+still refuse, 0/3 near-misses did. The **answerability gate** (roadmap below)
+addresses the refusal side; corpus expansion is the Hit@5 fix.
+
 The judge **surfaced real problems the keyword eval hid** — that is the point.
 None of these are a green-washed 100%. The original **12-question** run (temp
 0.2, before the faithfulness work below) moved faithfulness **67% → 75%** and
