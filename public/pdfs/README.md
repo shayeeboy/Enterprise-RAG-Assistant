@@ -9,7 +9,7 @@ each answer's **Sources** list links straight to the passage it cited.
 | File | Document | Status |
 |---|---|---|
 | `fundamentals-of-piano-practice.pdf` | *Fundamentals of Piano Practice* — Chuan C. Chang | ✅ **present & page-verified** — `#page=N` matches the ingested pages (offset 0, ~1.0 text overlap on sampled pages). Live. |
-| `hanon-virtuoso-pianist-pt1.pdf` | *The Virtuoso Pianist, Part I* — C. L. Hanon | ⚠️ **needed** — the copy first supplied was a **different 117-page edition** whose text matched **none** of our 21 ingested pages, so its `#page=N` would be wrong. It was removed and Hanon's `source_url` set to NULL (citations show as plain text). Add the **exact 21-page file that was ingested** (`virtuoso-pianist-pt1-a4.PDF`), then re-run the alignment check and set `source_url`. |
+| *(not hosted)* | *The Virtuoso Pianist, Part I* — C. L. Hanon (public domain) | ➖ **Plain-text by design** — Hanon is mostly staff notation, which `pdftotext` can't read, so only ~21 pages of prose were ever ingested. Its `source_url` is `NULL`, so citations render as plain text (no deep-link). To enable it later, host the **exact 21-page file that was ingested** and re-run the alignment check before setting `source_url`. |
 
 Filenames must be **lowercase `.pdf`** and match the `source_url` in `documents`
 (GitHub Pages is case-sensitive).
