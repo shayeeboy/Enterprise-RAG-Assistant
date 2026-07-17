@@ -19,6 +19,14 @@ function validateInput(q) {
   return { ok: true, value: t };
 }
 
+// Deep-link a citation to its source PDF at the exact page: source_url#page=N.
+// Returns null when the document has no hosted URL (link degrades to plain text).
+function citationUrl(c) {
+  if (!c || !c.source_url) return null;
+  const page = c.page_start != null ? `#page=${c.page_start}` : "";
+  return `${c.source_url}${page}`;
+}
+
 // Pull [n] markers out of the answer, dropping any that don't map to a real chunk.
 function extractCitations(answer, chunks) {
   const nums = new Set();
@@ -39,6 +47,8 @@ function extractCitations(answer, chunks) {
         page_start: c.page_start,
         page_end: c.page_end,
         content_type: c.content_type,
+        source_url: c.source_url || null,
+        url: citationUrl(c), // deep link to the exact PDF page (null if not hosted)
       };
     });
 }
@@ -96,4 +106,4 @@ function enforceCitations(answer, chunks, { minClaimLen = 45 } = {}) {
   return { text, dropped };
 }
 
-module.exports = { REFUSAL, validateInput, extractCitations, groundingGuard, enforceCitations };
+module.exports = { REFUSAL, validateInput, extractCitations, groundingGuard, enforceCitations, citationUrl };

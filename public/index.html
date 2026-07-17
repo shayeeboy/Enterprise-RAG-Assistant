@@ -28,6 +28,8 @@
   .cites{margin-top:12px; padding-top:10px; border-top:1px dashed var(--rule);
     font-size:12.5px; color:var(--slate);}
   .cites b{color:var(--ink);}
+  .cites a{color:var(--accent); text-decoration:underline; text-underline-offset:2px;}
+  .cites a:hover{text-decoration:none;}
   .meta{margin-top:8px; font-size:11px; color:var(--slate); font-family:ui-monospace,monospace;}
   .bar{position:fixed; bottom:0; left:0; right:0; background:var(--paper);
     border-top:1px solid var(--rule); padding:14px 20px;}
@@ -109,9 +111,15 @@
   function addAssistant(res){
     let cites = '';
     if(res.citations && res.citations.length){
-      cites = '<div class="cites"><b>Citations:</b><br>' + res.citations.map(c=>{
+      cites = '<div class="cites"><b>Sources:</b><br>' + res.citations.map(c=>{
         const p = c.page_start===c.page_end ? 'p.'+c.page_start : 'pp.'+c.page_start+'-'+c.page_end;
-        return `[${c.n}] ${esc(c.title)} — ${p} (${esc(c.content_type||'general')})`;
+        const label = esc(c.title) + ' — ' + p;
+        // Deep-link to the exact PDF page when the source is hosted; open securely
+        // in a new tab. Falls back to plain text when there's no URL.
+        const link = c.url
+          ? `<a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+          : label;
+        return `[${c.n}] ${link} (${esc(c.content_type||'general')})`;
       }).join('<br>') + '</div>';
     }
     let meta = '';

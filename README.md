@@ -137,6 +137,17 @@ rate" doesn't apply.
   visible in the docs with a stated fix path (vision-model rasterization)
   rather than quietly working around it.
 
+**User feedback — change request (implemented).** A reviewer asked that each
+answer's citations be **clickable and open the source at the exact page**, not
+just name a book and page. Delivered as a **Phase 2 + Phase 3** enhancement: the
+answer path attaches a per-citation deep link (`source_url#page=N`) to every
+citation ([Phase 2](#phase-2-query-time-assistant)), and the two source PDFs are
+**self-hosted on the GitHub Pages site** with the chat UI rendering the
+**Sources** list as links that open the cited page in a new tab
+([Phase 3](#phase-3-hosting-and-observability)). Page numbers come from the
+ingested PDFs, so hosting those exact files keeps `#page=N` aligned. (Drop the
+two PDFs into [`public/pdfs/`](public/pdfs/) to take it fully live.)
+
 ### How it works
 
 An enterprise-style RAG assistant that turns two piano-practice books into a
@@ -501,6 +512,17 @@ Two automated suites map to the [acceptance criteria](#executive-summary):
 | MRR | higher is better | 0.938 |
 | Refusal on 2 out-of-scope questions | 100% refused | 100% (2/2) |
 
+### Enhancement — clickable citations (backend, from feedback)
+
+Every citation now carries a **deep link to the exact source page**. The
+retrieval join hydrates each chunk's `source_url` (per-document, stored in the
+`documents` table); `extractCitations` and `sourceList` compute
+`source_url#page=N` from the chunk's `page_start`; and the `/ask` response
+includes a `url` on each citation — `null` when a document has no hosted PDF, so
+it degrades gracefully to plain text. No re-embedding was needed: this is
+document metadata plus a query-time field. See the UI + hosting half in
+[Phase 3](#phase-3-hosting-and-observability).
+
 [↑ Back to top](#executive-summary)
 
 ---
@@ -597,6 +619,19 @@ covers DB + LLM health):
 | Rate limit | rapid `/ask` returns `429` after `RATE_LIMIT_MAX` | ✅ |
 | Access code | `/ask` without valid `x-access-code` returns `401` when `ACCESS_CODE` set | ✅ |
 | Observability persistence | each `/ask` inserts a `query_logs` row; `/stats` aggregates; `npm run logs` searches | ✅ |
+
+### Enhancement — clickable citations (self-hosted PDFs + UI, from feedback)
+
+The two source PDFs are **self-hosted** from [`public/pdfs/`](public/pdfs/)
+(served by GitHub Pages), and the chat UI renders each answer's **Sources** as
+links that open the cited page — `source_url#page=N` — in a new tab
+(`target="_blank" rel="noopener noreferrer"`), falling back to plain text when a
+document has no URL. Hosting the **exact ingested PDFs** keeps the `#page=N`
+fragment aligned with the stored page numbers (which come from `pdftotext`'s page
+indexing of those files); `#page=` is honored by browsers' built-in PDF viewers
+for a directly-served `application/pdf`. Backend half in
+[Phase 2](#phase-2-query-time-assistant). _Going live needs the two PDF files
+dropped into `public/pdfs/` and a Cloud Run redeploy for the API change._
 
 [↑ Back to top](#executive-summary)
 
@@ -770,6 +805,7 @@ Enterprise-RAG-Assistant/
 │   └── config.js              ← env-driven, free/local defaults
 ├── server.js                 ← API + chat UI (CORS, rate limit, access code)
 ├── public/index.html         ← minimal chat front end (RAG_API_BASE aware)
+├── public/pdfs/              ← self-hosted source PDFs for clickable citations
 ├── .env.example
 ├── .github/workflows/ci.yml
 └── sql/schema.sql

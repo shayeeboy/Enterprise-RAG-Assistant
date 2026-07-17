@@ -31,7 +31,12 @@ const chunks = [
 assert.strictEqual(extractCitations("see [1] and [2] and [9]", chunks).length, 2, "invalid citation [9] must be dropped");
 assert.strictEqual(groundingGuard("no citations here", chunks).grounded, false, "answer with no citations is ungrounded");
 assert.strictEqual(groundingGuard("grounded [1]", chunks).grounded, true, "answer citing a real source is grounded");
-pass("citation extraction + grounding");
+// citation deep-links to source_url#page=N (clickable PDF citations)
+const citedUrl = extractCitations("see [1]", [{ title: "A", page_start: 42, page_end: 42, source_url: "https://host/doc.pdf" }]);
+assert.strictEqual(citedUrl[0].url, "https://host/doc.pdf#page=42", "citation deep-links to source_url#page=N");
+const citedNoUrl = extractCitations("see [1]", [{ title: "A", page_start: 42, page_end: 42 }]);
+assert.strictEqual(citedNoUrl[0].url, null, "citation url is null when the document has no source_url");
+pass("citation extraction + grounding + PDF deep-link");
 
 // 4. reciprocal rank fusion — a doc appearing in both lists should win
 const { reciprocalRankFusion } = require("../src/rag/retrieve");

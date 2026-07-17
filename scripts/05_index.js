@@ -18,16 +18,23 @@ const { Client } = require("pg"); // npm install pg
 const CHUNKS_DIR = path.join(__dirname, "..", "data", "chunks");
 const BATCH_SIZE = 100;
 
+// Public base for the self-hosted PDFs (served from the GitHub Pages site's
+// public/pdfs/). Citations deep-link as `${source_url}#page=N`. Override with
+// PDF_BASE_URL to host the PDFs elsewhere.
+const PDF_BASE = (process.env.PDF_BASE_URL || "https://shayeeboy.github.io/Enterprise-RAG-Assistant/pdfs").replace(/\/$/, "");
+
 const DOC_META = {
   "fundamentals-of-piano-practice": {
     title: "Fundamentals of Piano Practice",
     author: "Chuan C. Chang",
     source_type: "method-book",
+    source_url: `${PDF_BASE}/fundamentals-of-piano-practice.pdf`,
   },
   "hanon-virtuoso-pianist-pt1": {
     title: "The Virtuoso Pianist, Part I",
     author: "C. L. Hanon",
     source_type: "exercise-book",
+    source_url: `${PDF_BASE}/hanon-virtuoso-pianist-pt1.pdf`,
   },
 };
 
@@ -37,12 +44,13 @@ async function upsertDocuments(client, chunks) {
     const meta = DOC_META[docId];
     const pageCount = Math.max(...chunks.filter((c) => c.doc_id === docId).map((c) => c.page_end));
     await client.query(
-      `INSERT INTO documents (doc_id, title, author, source_type, page_count)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO documents (doc_id, title, author, source_type, page_count, source_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (doc_id) DO UPDATE SET
          title = EXCLUDED.title, author = EXCLUDED.author,
-         source_type = EXCLUDED.source_type, page_count = EXCLUDED.page_count`,
-      [docId, meta.title, meta.author, meta.source_type, pageCount]
+         source_type = EXCLUDED.source_type, page_count = EXCLUDED.page_count,
+         source_url = EXCLUDED.source_url`,
+      [docId, meta.title, meta.author, meta.source_type, pageCount, meta.source_url || null]
     );
   }
   console.log(`Upserted ${docIds.length} document records.`);

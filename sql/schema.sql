@@ -11,8 +11,11 @@ CREATE TABLE IF NOT EXISTS documents (
   author      TEXT,
   source_type TEXT NOT NULL,       -- 'method-book' | 'exercise-book'
   page_count  INTEGER,
+  source_url  TEXT,                -- public PDF URL; citations deep-link as source_url#page=N
   created_at  TIMESTAMPTZ DEFAULT now()
 );
+-- Backward-compatible migration for DBs created before source_url.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_url TEXT;
 
 CREATE TABLE IF NOT EXISTS chunks (
   chunk_id       TEXT PRIMARY KEY,

@@ -86,8 +86,8 @@ async function hybridRetrieve(searchQuery, filters = {}) {
   // Hydrate full rows + document metadata (title/author for citations).
   const ids = shortlist.map((c) => c.chunk_id);
   const { rows } = await query(
-    `SELECT c.chunk_id, c.text, c.page_start, c.page_end, c.content_type, c.skill_level,
-            d.title, d.author
+    `SELECT c.chunk_id, c.doc_id, c.text, c.page_start, c.page_end, c.content_type, c.skill_level,
+            d.title, d.author, d.source_url
      FROM chunks c JOIN documents d ON d.doc_id = c.doc_id
      WHERE c.chunk_id = ANY($1)`,
     [ids]

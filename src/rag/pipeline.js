@@ -10,7 +10,7 @@
  * tokens, costUsd) and logged by the server — see src/rag/trace.js.
  */
 const cfg = require("./config");
-const { validateInput, groundingGuard, enforceCitations, REFUSAL } = require("./guardrails");
+const { validateInput, groundingGuard, enforceCitations, citationUrl, REFUSAL } = require("./guardrails");
 const { rewriteQuery } = require("./rewrite");
 const { hybridRetrieve } = require("./retrieve");
 const { rerank } = require("./rerank");
@@ -29,6 +29,8 @@ function sourceList(chunks) {
     page_end: c.page_end,
     content_type: c.content_type,
     rerank: c.rerank != null ? Number(c.rerank.toFixed(4)) : null,
+    source_url: c.source_url || null,
+    url: citationUrl(c), // deep link to the exact PDF page (null if not hosted)
   }));
 }
 
