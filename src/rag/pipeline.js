@@ -16,6 +16,7 @@ const { hybridRetrieve } = require("./retrieve");
 const { rerank } = require("./rerank");
 const { enforceEntailment } = require("./nli");
 const { isAnswerable } = require("./gate");
+const { matchMeta } = require("./meta");
 const { buildMessages } = require("./prompt");
 const { chat } = require("./llm");
 const { newTrace, span, addTokens, finalize } = require("./trace");
@@ -74,6 +75,18 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
   if (!v.ok) return { ok: false, stage: "input-guardrail", answer: v.message, citations: [], meta: buildMeta(trace) };
   const question = v.value;
   stage("input", { question });
+
+  // 1b. Meta / identity intent ("who are you?", "what can you do?", "help") —
+  // not in the KB, so retrieval + the gate would refuse it, which reads as
+  // broken for an identity question. Answer honestly, no fabricated citations.
+  const metaAnswer = matchMeta(question);
+  if (metaAnswer) {
+    stage("meta", { intent: "meta" });
+    return {
+      ok: true, kind: "meta", answer: metaAnswer, citations: [], sources: [], contexts: [],
+      meta: buildMeta(trace, { intent: "meta" }),
+    };
+  }
 
   // 2. Query rewrite (non-fatal on failure)
   let rw = { query: question, rewritten: false };

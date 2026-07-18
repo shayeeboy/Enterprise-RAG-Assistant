@@ -13,7 +13,7 @@ const path = require("path");
 const pass = (name) => console.log("[PASS] " + name);
 
 // 1. every module imports cleanly (catches syntax / bad require paths)
-const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge", "nli", "gate"];
+const mods = ["config", "db", "embed", "retrieve", "rerank", "prompt", "llm", "rewrite", "guardrails", "pipeline", "trace", "logstore", "judge", "nli", "gate", "meta"];
 mods.forEach((m) => require("../src/rag/" + m));
 pass(`all modules import (${mods.length})`);
 
@@ -141,5 +141,15 @@ assert.ok(Array.isArray(bank) && bank.length >= 100, "benchmark bank should have
 assert.strictEqual(new Set(bank).size, bank.length, "benchmark questions must be unique");
 assert.ok(bank.every((q) => typeof q === "string" && q.trim().endsWith("?")), "every benchmark item is a question");
 pass(`observability benchmark bank (${bank.length} questions)`);
+
+// 12. Meta / identity intent — answers "who are you?" instead of refusing,
+// without catching real KB questions.
+const { matchMeta } = require("../src/rag/meta");
+assert.ok(matchMeta("who are you?"), "identity question → meta answer");
+assert.ok(matchMeta("What can you do?"), "capability question → meta answer");
+assert.ok(matchMeta("help"), "help → meta answer");
+assert.strictEqual(matchMeta("How do I practice scales?"), null, "real KB question → not meta");
+assert.strictEqual(matchMeta("What can you do about a weak 4th finger?"), null, "KB question containing 'you' → not meta");
+pass("meta / identity intent handler");
 
 console.log("\nAll wiring + logic checks passed.");
