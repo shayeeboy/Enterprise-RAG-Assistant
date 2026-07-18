@@ -56,6 +56,14 @@ document set, retrieve accurately, generate only from what's retrieved,
 and know when to say "I don't know." That pattern is what would transfer
 to an enterprise KB, not the piano content itself.
 
+**Enterprise applicability.** What's being demonstrated is the *operational
+lifecycle* of a production RAG platform, exercised end-to-end — ingestion, hybrid
+retrieval, **evaluation** (a deterministic LLM-judge), **observability**
+(per-request tracing), **deployment** (free-tier, off-localhost), **governance**
+(cited answers, refusal guardrails, source attribution), and **continuous
+improvement** (nightly eval + benchmark). The piano books are just the test
+corpus; that lifecycle is the transferable part.
+
 **Success metric.** Two tiers, deliberately kept separate:
 
 - **System health** — measured live, per request, via built-in observability persisted to a searchable Neon table.
