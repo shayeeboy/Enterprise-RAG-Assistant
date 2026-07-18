@@ -128,7 +128,7 @@
       const m = res.meta, L = m.latencyMs || {};
       const parts = [
         (res.grounded===false ? '⚠ ungrounded' : null),
-        'model: ' + esc(m.model||''),
+        (m.model ? 'model: ' + esc(m.model) : null),
         (L.total!=null ? L.total+'ms' : null),
         (m.tokens?.total ? m.tokens.total+' tok' : null),
         (m.costUsd ? '$'+m.costUsd : null),

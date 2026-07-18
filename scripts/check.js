@@ -145,11 +145,18 @@ pass(`observability benchmark bank (${bank.length} questions)`);
 // 12. Meta / identity intent — answers "who are you?" instead of refusing,
 // without catching real KB questions.
 const { matchMeta } = require("../src/rag/meta");
-assert.ok(matchMeta("who are you?"), "identity question → meta answer");
-assert.ok(matchMeta("What can you do?"), "capability question → meta answer");
-assert.ok(matchMeta("help"), "help → meta answer");
+assert.strictEqual(matchMeta("who are you?")?.kind, "identity", "identity question");
+assert.strictEqual(matchMeta("What can you do?")?.kind, "identity", "capability question");
+assert.strictEqual(matchMeta("help")?.kind, "identity", "help");
+assert.strictEqual(matchMeta("hi")?.kind, "greeting", "greeting");
+assert.strictEqual(matchMeta("Hello there!")?.kind, "greeting", "greeting variant");
+assert.strictEqual(matchMeta("how are you?")?.kind, "greeting", "small talk");
+assert.strictEqual(matchMeta("thanks!")?.kind, "thanks", "thanks");
+assert.strictEqual(matchMeta("thank you so much")?.kind, "thanks", "thanks variant");
+assert.strictEqual(matchMeta("bye")?.kind, "farewell", "farewell");
+assert.strictEqual(matchMeta("see you later")?.kind, "farewell", "farewell variant");
 assert.strictEqual(matchMeta("How do I practice scales?"), null, "real KB question → not meta");
 assert.strictEqual(matchMeta("What can you do about a weak 4th finger?"), null, "KB question containing 'you' → not meta");
-pass("meta / identity intent handler");
+pass("meta / conversational intents (identity · greeting · thanks · farewell)");
 
 console.log("\nAll wiring + logic checks passed.");

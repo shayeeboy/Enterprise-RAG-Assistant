@@ -70,25 +70,28 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
   const stage = (name, data) => onStage && onStage(name, data);
   const trace = newTrace({ provider: cfg.LLM_PROVIDER, model: cfg.LLM_MODEL });
 
-  // 1. Guardrails — input
+  // 1. Meta / conversational intents (greetings, thanks, identity, help) —
+  // handled before the length guard so short greetings ("hi") work, and without
+  // retrieval/LLM: instant, $0, and never a scope refusal.
+  const metaResult = matchMeta(rawQuestion);
+  if (metaResult) {
+    stage("meta", { intent: metaResult.kind });
+    const m = buildMeta(trace, { intent: metaResult.kind });
+    m.provider = null;
+    m.model = null; // canned reply — no model ran
+    return {
+      ok: true, kind: "meta", intent: metaResult.kind, answer: metaResult.answer,
+      citations: [], sources: [], contexts: [], meta: m,
+    };
+  }
+
+  // 2. Guardrails — input
   const v = validateInput(rawQuestion);
   if (!v.ok) return { ok: false, stage: "input-guardrail", answer: v.message, citations: [], meta: buildMeta(trace) };
   const question = v.value;
   stage("input", { question });
 
-  // 1b. Meta / identity intent ("who are you?", "what can you do?", "help") —
-  // not in the KB, so retrieval + the gate would refuse it, which reads as
-  // broken for an identity question. Answer honestly, no fabricated citations.
-  const metaAnswer = matchMeta(question);
-  if (metaAnswer) {
-    stage("meta", { intent: "meta" });
-    return {
-      ok: true, kind: "meta", answer: metaAnswer, citations: [], sources: [], contexts: [],
-      meta: buildMeta(trace, { intent: "meta" }),
-    };
-  }
-
-  // 2. Query rewrite (non-fatal on failure)
+  // 3. Query rewrite (non-fatal on failure)
   let rw = { query: question, rewritten: false };
   try {
     rw = await span(trace, "rewrite", () => rewriteQuery(question));
