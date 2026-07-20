@@ -788,11 +788,7 @@ Enterprise-RAG-Assistant/
 ├── public/pdfs/              ← self-hosted source PDFs for clickable citations
 ├── .env.example
 ├── .github/workflows/ci.yml
-├── sql/schema.sql
-└── .git_prompts/              ← reverse-engineered reproducibility prompts (see its README)
-    ├── phases/                ← one prompt per historical dev phase (01-04)
-    ├── sessions/              ← one prompt per going-forward work session
-    └── MASTER_REVERSE_ENGINEER_PROMPT.md   ← git-ignored (sensitive, local only)
+└── sql/schema.sql
 ```
 
 ## Tools and services
