@@ -116,11 +116,24 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   console.log("");
 
   const results = [];
+  const refusedAnswerable = [];
   let usageTotal = { prompt: 0, completion: 0, total: 0 };
 
   // --- Answerable: judge faithfulness / correctness / semantic Hit@5 ---
+  // If the pipeline REFUSES an answerable question (grounded=false — e.g. the
+  // answerability gate declines a thin-coverage topic), there's no answer to
+  // grade. Grading the refusal text against the retrieved chunks would wrongly
+  // score it as a hallucination + correctness 0 — double-penalising a correct
+  // "I don't know". So we record refusals separately as a COVERAGE figure and
+  // do NOT feed them to the answer-quality judge.
   for (const q of answerable) {
     const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
+    if (res.grounded === false) {
+      refusedAnswerable.push({ id: q.id, question: q.question });
+      console.log(`  REFUSED (coverage miss, not graded)  — ${q.question}`);
+      await sleep(300);
+      continue;
+    }
     const judgeInput = {
       question: q.question,
       groundTruth: q.ground_truth,
@@ -158,8 +171,10 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     await sleep(500);
   }
 
-  // --- Aggregate ---
-  const n = results.length;
+  // --- Aggregate (answer-quality metrics are over ANSWERED questions only;
+  //     refused answerable questions are reported separately as coverage) ---
+  const n = results.length; // answered
+  const answeredRate = answerable.length ? n / answerable.length : 0;
   const halluRate = n ? results.reduce((s, r) => s + r.metrics.hallucination_detected, 0) / n : 0;
   const meanCorrect = n ? results.reduce((s, r) => s + r.metrics.answer_correctness_score, 0) / n : 0;
   const hit5Rate = n ? results.reduce((s, r) => s + r.metrics.hit5_retrieval_pass, 0) / n : 0;
@@ -169,17 +184,20 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     timestamp: new Date().toISOString(),
     generator: { provider: cfg.LLM_PROVIDER, model: cfg.LLM_MODEL },
     judge: { provider: cfg.LLM_PROVIDER, model: settings.model, temperature: settings.temperature, mode: settings.model !== cfg.LLM_MODEL ? "cross-judge" : "self-judge" },
-    counts: { answerable: n, out_of_scope: unanswerable.length },
+    counts: { answerable: answerable.length, answered: n, refused_answerable: refusedAnswerable.length, out_of_scope: unanswerable.length },
     metrics: {
       hallucination_rate: Number(halluRate.toFixed(3)),
       faithfulness_rate: Number((1 - halluRate).toFixed(3)),
       mean_answer_correctness: Number(meanCorrect.toFixed(2)),
       semantic_hit5: Number(hit5Rate.toFixed(3)),
+      answered_rate: Number(answeredRate.toFixed(3)),
       out_of_scope_refusal: refusalRate == null ? null : Number(refusalRate.toFixed(3)),
     },
+    note: "faithfulness / correctness / Hit@5 are over ANSWERED questions; refused answerable questions are counted as coverage (answered_rate), not graded as hallucinations.",
     judge_tokens: usageTotal,
     cost_usd: 0,
     per_question: results,
+    refused_answerable: refusedAnswerable,
     refusals: refusalRows,
   };
 
@@ -187,7 +205,9 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   fs.writeFileSync(outPath, JSON.stringify(summary, null, 2));
 
   const goalMet = (ok) => (ok ? "✓ goal" : "· below goal");
-  console.log("\n=== Results (vs aspirational goals) ===");
+  console.log("\n=== Results (answer-quality over answered questions; vs aspirational goals) ===");
+  console.log(`Answered (of answerable):        ${n}/${answerable.length}` +
+    (refusedAnswerable.length ? `   (${refusedAnswerable.length} refused as thin-coverage: ${refusedAnswerable.map((x) => x.id).join(", ")})` : ""));
   console.log(`Faithfulness (no hallucination): ${pct(1 - halluRate)}   (hallucination ${pct(halluRate)}, goal ≤ ${pct(GOAL_HALLUCINATION_MAX)})  ${goalMet(halluRate <= GOAL_HALLUCINATION_MAX)}`);
   console.log(`Mean answer correctness:         ${meanCorrect.toFixed(2)} / 5   (goal ≥ ${GOAL_CORRECTNESS_MIN})  ${goalMet(meanCorrect >= GOAL_CORRECTNESS_MIN)}`);
   console.log(`Semantic Hit@5:                  ${pct(hit5Rate)}   (${results.filter((r) => r.metrics.hit5_retrieval_pass).length}/${n}, goal ≥ ${pct(GOAL_HIT5_MIN)})  ${goalMet(hit5Rate >= GOAL_HIT5_MIN)}`);

@@ -88,20 +88,20 @@ each with how it's verified and where the automated test lives:
 | Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
 | Latency | p50 / p95 tracked and visible | tracked live — see [Live observability](#live-observability) | observability · `/stats` |
 | Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
-| Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **59%** (hallucination 41%) | `npm run eval:judge` |
-| Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **2.71 / 5** | `npm run eval:judge` |
-| Semantic Hit@5 (LLM-judge) | top chunks semantically contain the answer (not keyword match) | **76% (13/17)** | `npm run eval:judge` |
+| Faithfulness (LLM-judge) | answers strictly derivable from retrieved context | **67%** (hallucination 33%, over answered) | `npm run eval:judge` |
+| Answer correctness (LLM-judge, 0–5) | mean score vs human-validated golden answers | **3.07 / 5** (over answered) | `npm run eval:judge` |
+| Semantic Hit@5 (LLM-judge) | top chunks semantically contain the answer (not keyword match) | **73% (11/15)** | `npm run eval:judge` |
 
 **Now measured (Phase 4 — [LLM-Judge evaluation](#phase-4-llm-judge-evaluation)):**
 a deterministic LLM-judge now scores true hallucination rate, answer correctness
 (vs golden answers), and a *semantic* Hit@5 — closing the two honest gaps that
 previously needed human judgement. Reference run (with the answerability gate
-now on by default): **faithfulness 59%, correctness 2.71 / 5, semantic Hit@5
-76%, refusal 80%** — deliberately honest "in progress" numbers. Refusal jumped
-40% → 80% now that the gate is on; faithfulness and correctness dipped because
-the gate over-refuses a couple of thin-coverage in-scope questions (scored as
-both incorrect and a hallucinated "no answer" claim) — see
-[Phase 4](#phase-4-llm-judge-evaluation) for the breakdown. Still N/A: there is
+now on by default): **faithfulness 67%, correctness 3.07 / 5, semantic Hit@5
+73%, refusal 80%** (over the 15 answered of 17 answerable) — deliberately honest
+"in progress" numbers. The gate roughly **doubled** out-of-scope refusal
+(40% → 80%) while answer quality held steady; correctness/Hit@5 are flat vs
+pre-gate once a harness bug (grading a refusal as a hallucination) was fixed —
+see [Phase 4](#phase-4-llm-judge-evaluation) for the breakdown. Still N/A: there is
 no response cache, so "cache hit rate" doesn't apply.
 
 **Key trade-off decisions** *(decision — why)*:
@@ -134,7 +134,7 @@ and swappable.
 | [**Phase 1 — Ingestion**](#phase-1-ingestion) | PDFs → parse → chunk → metadata → local embeddings → Neon pgvector | 985 chunks indexed, fully offline, no API key |
 | [**Phase 2 — Query-time assistant**](#phase-2-query-time-assistant) | 13-step RAG workflow: rewrite → hybrid search → rerank → LLM → citations → guardrails | grounded, cited answers; CLI + API + chat UI |
 | [**Phase 3 — Hosting & observability**](#phase-3-hosting-and-observability) | deploy-ready hardening, LLM moved to Groq free tier, per-request tracing | **~252 s → ~11 s** at **$0** (see below) |
-| [**Phase 4 — LLM-Judge evaluation**](#phase-4-llm-judge-evaluation) | deterministic judge scores faithfulness, answer-correctness, and semantic Hit@5 vs golden answers | closes the human-judgment gaps; faithfulness 59%, correctness 2.71/5, refusal 80%, $0 |
+| [**Phase 4 — LLM-Judge evaluation**](#phase-4-llm-judge-evaluation) | deterministic judge scores faithfulness, answer-correctness, and semantic Hit@5 vs golden answers | closes the human-judgment gaps; faithfulness 67%, correctness 3.07/5, refusal 80%, $0 |
 
 **Knowledge base (this build):**
 
@@ -664,8 +664,8 @@ Out-of-scope questions are checked separately for correct **refusal**.
 
 | Honest gap (before) | Action taken (Phase 4) | Outcome |
 |---|---|---|
-| Hallucination rate + answer correctness were **not measured** — they needed human judgement | Deterministic LLM-judge scores faithfulness (answer ⊂ context) and correctness (0–5 vs golden answers) | Now measured every run: **faithfulness 59%, mean correctness 2.71 / 5** |
-| Hit@5 was a **keyword-match proxy** (reported 100%) that can't tell real substance from a coincidental word | Judge re-scores Hit@5 **semantically** against the golden answer | Honest **semantic Hit@5 76% (13/17)** — the proxy was over-optimistic |
+| Hallucination rate + answer correctness were **not measured** — they needed human judgement | Deterministic LLM-judge scores faithfulness (answer ⊂ context) and correctness (0–5 vs golden answers) | Now measured every run: **faithfulness 67%, mean correctness 3.07 / 5** (over answered) |
+| Hit@5 was a **keyword-match proxy** (reported 100%) that can't tell real substance from a coincidental word | Judge re-scores Hit@5 **semantically** against the golden answer | Honest **semantic Hit@5 73% (11/15)** — the proxy was over-optimistic |
 | No answer-quality regression signal in CI | `eval:judge` added to the gated CI job with regression floors (refusal floor is a hard 100%) | Build fails on a genuine quality regression, not on normal run-to-run noise |
 
 ### Results (reference run)
@@ -675,45 +675,42 @@ over 17 answerable + 5 out-of-scope questions:
 
 | Metric | Result | Near-term goal | Met? |
 |---|---|---|---|
-| Faithfulness (no hallucination) | **59%** (hallucination 41%) | ≥ 85% | ✗ in progress |
-| Mean answer correctness | **2.71 / 5** | ≥ 3.6 | ✗ in progress |
-| Semantic Hit@5 | **76%** (13/17) | ≥ 90% | ✗ in progress |
-| Out-of-scope refusal | **80%** (4/5) | 100% | ✗ in progress |
+| Faithfulness (no hallucination) | **67%** (hallucination 33%) | ≥ 85% | ✗ in progress |
+| Mean answer correctness | **3.07 / 5** | ≥ 3.6 | ✗ in progress |
+| Semantic Hit@5 | **73%** (11/15) | ≥ 90% | ✗ in progress |
+| Out-of-scope refusal | **80%** (4/5) | 100% | ↑ big gain (was 40%) |
+| Answered (coverage) | **15/17** answerable — 2 thin-coverage refused | — | coverage, not graded |
 
-**Is this a regression from the previous run? Partly — and now we know why.**
-This run adds the **answerability gate** (`ANSWERABILITY_GATE`, on by default),
-which refuses near-miss out-of-scope questions. Isolating *this* run to the
-**same 12 questions** the previous run used shows a real dip, not just noise:
+_Answer-quality metrics are over the **answered** questions: a question the
+pipeline refuses has no answer to grade, so it is counted as coverage rather than
+graded as a wrong answer._
 
-| Metric | Prev run · 12 Q | This run · **same 12 Q** | This run · **new 5 Q** | This run · all 17 |
-|---|---|---|---|---|
-| Faithfulness | 83% | **75%** ↓ | 20% | 59% |
-| Correctness | 3.17 | **2.92** ↓ | 2.20 | 2.71 |
-| Semantic Hit@5 | 83% | **75%** ↓ | 80% | 76% |
+**Did adding the answerability gate tank quality? No — that was a harness bug.**
+An earlier version of this section reported faithfulness 59% / correctness 2.71
+and blamed the gate. The real cause: when the gate refuses a thin-coverage
+answerable question (*"best way to practice scales"*, *"how to warm up"*), the
+eval was feeding the **refusal text** to the judge alongside the retrieved
+chunks — so the judge flagged the honest "I couldn't find it in the knowledge
+base" as **both** a hallucination (the chunks *do* mention the topic) **and**
+correctness 0. That double-penalised a *correct* refusal. Fixed: refused
+answerable questions are now counted as **coverage** and not graded as answers.
+Re-aggregated under the corrected methodology:
 
-The 12-Q dip has one identifiable cause: the gate is deliberately strict, and it
-now false-refuses **"What is the best way to practice scales?"** — a thin-coverage
-but genuinely answerable question. The system said "I couldn't find an answer,"
-which the judge correctly scored as **both** incorrect (0/5) **and** a
-hallucination (the retrieved context does discuss scales, so the refusal claim
-itself isn't grounded) — one wrong answer drags both metrics on a 12-question
-set. The **new 5 Q** faithfulness (20%) shows the same failure mode hit a second
-question ("How do I warm up before playing?"). This is the exact trade-off the
-roadmap anticipated: the gate is tuned to catch out-of-scope near-misses even at
-the cost of occasionally refusing a real, thinly-covered in-scope question.
+| Metric | Pre-gate (17 Q) | With gate, **fixed** (answered) | Δ |
+|---|---|---|---|
+| Faithfulness | 76% | **67%** | −9 (single-run judge variance) |
+| Correctness | 3.06 | **3.07** | ~flat |
+| Semantic Hit@5 | 71% | **73%** | ~flat |
+| Out-of-scope refusal | 40% | **80%** | **+40 — the gate's win** |
 
-Semantic Hit@5 improved (71% → 76%) — the gate doesn't touch retrieval, so this
-reflects normal run-to-run judge variance plus the 5 new questions landing
-slightly easier for retrieval than last time.
-
-The judge **surfaced real problems the keyword eval hid** — that is the point.
-None of these are a green-washed 100%. Out-of-scope refusal is the clear win:
-**40% (2/5) → 80% (4/5)** now that the gate is on — only `tune-piano` still
-leaks (a retrieved chunk literally mentions tuning, so the gate lets it
-through). CI's **regression floors** (looser than the near-term goals above:
-hallucination ≤ 34%, correctness ≥ 2.7, Hit@5 ≥ 75%, refusal = 100%) are
-**currently not met** on hallucination (41%) and refusal (80%) — correctness and
-Hit@5 now clear their floors. See the roadmap below for the fix path.
+So the gate roughly **doubled** out-of-scope refusal while answer quality on the
+questions it *does* answer held steady. Two genuinely thin-coverage questions are
+now refused — a **coverage** gap (the corpus barely covers scales / warm-up),
+addressed by expanding the KB, not by weakening the gate. The residual
+faithfulness movement is single-run judge variance, which is why CI gates on
+**regression floors** (hallucination ≤ 34%, correctness ≥ 2.7, Hit@5 ≥ 75%,
+refusal = 100%) rather than the aspirational goals — and why the nightly
+auto-refresh is now paused, so one noisy run can't rewrite the headline.
 
 ### Improvement roadmap
 
@@ -723,9 +720,9 @@ most of it directly motivated by what the judge's reasoning traces flagged.
 
 | Metric | Current | Near-term | Stretch | How to get there |
 |---|---|---|---|---|
-| Faithfulness (no hallucination) | 59% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation; a citation-grounding trim (`ENFORCE_CITATIONS`); and a local **NLI entailment filter** (`ENFORCE_ENTAILMENT`, opt-in) that drops answer sentences the retrieved context doesn't entail. The drop from 76%→59% is mostly the **answerability gate**: it now false-refuses 2 thin-coverage in-scope questions, and the judge correctly scores an unsupported "I couldn't find an answer" as a hallucination. **Next:** tighten the gate's near-miss/thin-coverage boundary; tune the NLI threshold against the eval — strict sentence-level NLI is aggressive on synthesized sentences, so it's off by default until its effect is measured (an `ENFORCE_ENTAILMENT=true` A/B run is queued — the generator's Groq free-tier daily token cap was exhausted mid-run and blocked it this time); harden the grounding prompt ("state only what a source explicitly says — never infer"). |
-| Answer correctness (0–5) | 2.71 | ≥ 3.6 | ≥ 4.2 | Same gate over-refusal (0/5 on 2 questions) is the main driver of the drop from 3.06. Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
-| Semantic Hit@5 | 76% | ≥ 90% | ≥ 95% | Improved from 71% (13/17 vs 12/17) — retrieval is untouched by the gate, so this is normal run-to-run judge variance. **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
+| Faithfulness (no hallucination) | 67% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation; a citation-grounding trim (`ENFORCE_CITATIONS`); and a local **NLI entailment filter** (`ENFORCE_ENTAILMENT`, opt-in) that drops answer sentences the retrieved context doesn't entail. (~flat vs 76% pre-gate once the harness stopped grading gate refusals as hallucinations; the residual movement is single-run judge variance.) **Next:** tune the NLI threshold against the eval — strict sentence-level NLI is aggressive on synthesized sentences, so it's off by default until measured; harden the grounding prompt ("state only what a source explicitly says — never infer"); report the median of N runs to damp variance. |
+| Answer correctness (0–5) | 3.07 | ≥ 3.6 | ≥ 4.2 | ~flat vs 3.06 pre-gate (the earlier "2.71" was the harness bug). Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
+| Semantic Hit@5 | 73% | ≥ 90% | ≥ 95% | ~flat vs 71% pre-gate (over the answered set). **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
 | Out-of-scope refusal | 80% (4/5) | 100% | 100% (hold) | ✅ **shipped and measured:** an **answerability gate** (`ANSWERABILITY_GATE`) — a focused LLM YES/NO on whether the retrieved chunks actually answer *this* question — catches near-misses the rerank floor can't (their chunks score as topically relevant as valid questions). `eval:judge` confirms refusal **40% (2/5) → 80% (4/5)**; only `tune-piano` still leaks (a chunk literally mentions tuning). Deliberately strict, so it also refuses 2 thinnest-coverage in-scope questions (see the faithfulness/correctness rows above). **Next:** close the `tune-piano` leak without re-breaking the 2 false-refused in-scope questions. |
 | Eval confidence | 22 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | ✅ **shipped:** grew the set 14 → 22 (17 answerable + 5 out-of-scope, incl. adversarial near-misses). **Next:** report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
 
@@ -853,7 +850,8 @@ resolved them.
 
 | Issue | Resolution / lesson |
 |---|---|
-| The keyword eval reported a reassuring Hit@5 100% | A semantic LLM-judge showed the honest picture (currently Hit@5 76%, faithfulness 59%, correctness ~2.7/5). A proxy that only checks for a keyword can't see whether the *answer* is right — measure the answer, not just the retrieval. |
+| The keyword eval reported a reassuring Hit@5 100% | A semantic LLM-judge showed the honest picture (currently Hit@5 73%, faithfulness 67%, correctness ~3.1/5). A proxy that only checks for a keyword can't see whether the *answer* is right — measure the answer, not just the retrieval. |
+| The eval graded a *refusal* as a hallucination | After the answerability gate shipped, the "Gaps Addressed" numbers looked like they were tanking (faithfulness 76%→59%, correctness 3.06→2.71). Root cause was **not** the model or the gate — it was the harness feeding a gate's refusal text ("I couldn't find it in the KB") to the faithfulness/correctness judge *with the retrieved chunks attached*, so the judge scored the honest refusal as **both** a hallucination **and** correctness 0. Fixed by counting refused answerable questions as **coverage**, not grading them as answers — which recovered correctness to 3.07 and revealed the gate's real effect: out-of-scope refusal **doubled (40%→80%)** with answer quality flat. Also paused the nightly auto-refresh so a single noisy run couldn't keep rewriting the headline. Lesson: when a new component changes behavior, check that the *evaluation* still measures the right thing before trusting the trend. |
 | Judge falsely flagged hallucinations on `[6]` citations | The judge saw only the top-5 chunks while the generator prompts with top-6, so valid citations to `[6]` were scored as fabrications. The judge's *own reasoning traces* exposed the bug. Fixed by showing the judge the exact top-K the generator used — the judge must see precisely what the model saw. |
 | Making answers more complete broke refusal (100% → 50%) | A "cover the key points" prompt made the model stretch an unrelated chunk into an answer for "capital of France." Scoping completeness to in-scope questions and re-emphasizing refusal restored it to 100%. Completeness and refusal pull in opposite directions — tune for both, and measure both. |
 | Groq free-tier **daily token cap** hit mid-iteration | Five eval runs exhausted the generator's 100k-tokens/day limit; the pipeline swallowed the 429 and returned an error string, which the judge scored as 0 — silent garbage. Hardened the harness to **abort loudly** on a rate-limited generation, and made `eval/judge-results.json` a regenerable, gitignored artifact. |
