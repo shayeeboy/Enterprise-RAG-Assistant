@@ -3,6 +3,8 @@
  *
  *   POST /ask     { question }        → full pipeline result (answer + citations)
  *   GET  /health                      → DB + LLM reachability
+ *   GET  /stats                       → aggregated observability over logged attempts
+ *   GET  /snapshot                    → machine-readable RagHealthSnapshot (live stats + eval summary)
  *   GET  /                            → static chat UI (public/index.html)
  *
  * Deployment hardening (all opt-in via env — see .env.example and docs/PHASE-3.md):
@@ -16,6 +18,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const { answerQuestion } = require("./src/rag/pipeline");
 const { ping } = require("./src/rag/llm");
 const { pool } = require("./src/rag/db");
@@ -90,6 +93,85 @@ app.get("/stats", async (_req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ---------- Product snapshot ----------
+// A stable, machine-readable health snapshot for downstream consumers (e.g. the
+// AI Product & Leadership Studio). Operational metrics (latency, grounded rate,
+// cost/query, volume) are LIVE from the observability store; the judged quality
+// metrics come from the last eval run (eval/summary.json, refreshed by
+// `npm run eval:judge`). Shape matches the Studio's RagHealthSnapshot contract.
+app.get("/snapshot", async (_req, res) => {
+  const out = {
+    productId: "enterprise-rag",
+    status: "ok",
+    provider: cfg.LLM_PROVIDER,
+    model: cfg.LLM_MODEL,
+    db: "unknown",
+    llm: "unknown",
+    provenance: { operational: "live:/stats", evaluation: "eval-harness (eval/summary.json)" },
+  };
+
+  // Liveness
+  try {
+    await pool.query("SELECT 1");
+    out.db = "connected";
+  } catch {
+    out.db = "unreachable";
+    out.status = "degraded";
+  }
+  out.llm = (await ping()) ? "reachable" : "unreachable";
+
+  // Live observability (best-effort — never fail the snapshot on a stats error)
+  let stats = {};
+  try {
+    stats = await logstore.getStats();
+  } catch (e) {
+    out.provenance.operationalError = e.message;
+  }
+
+  // Committed eval summary (best-effort)
+  let summary = { metrics: [], derived: {}, evalRunAt: null, knowledgeFreshnessDays: null };
+  try {
+    summary = JSON.parse(fs.readFileSync(path.join(__dirname, "eval", "summary.json"), "utf8"));
+  } catch (e) {
+    out.provenance.evaluationError = e.message;
+  }
+
+  const total = Number(stats.total || 0);
+  const groundedLive = total ? Math.round((Number(stats.grounded_count || 0) / total) * 100) : null;
+  const d = summary.derived || {};
+
+  out.retrievalQuality = d.retrievalQuality ?? null;
+  out.groundedness = groundedLive ?? null; // live-derived
+  out.citationAccuracy = d.citationAccuracy ?? null;
+  out.hallucinationRate = d.hallucinationRate ?? null;
+  out.costPerQuery = total && stats.total_cost_usd != null ? Number(stats.total_cost_usd) / total : 0;
+  out.latencyMsP50 = stats.p50_latency_ms ?? null;
+  out.latencyMsP95 = stats.p95_latency_ms ?? null;
+  out.knowledgeFreshnessDays = summary.knowledgeFreshnessDays ?? null;
+  out.evaluationMetrics = (summary.metrics || []).map((m) => ({
+    metric: m.metric,
+    score: m.score,
+    passThreshold: m.passThreshold,
+    pass: m.pass,
+  }));
+  out.observability = {
+    total,
+    liveCount: stats.live_count ?? null,
+    benchmarkCount: stats.benchmark_count ?? null,
+    groundedRate: groundedLive,
+    errorCount: stats.error_count ?? null,
+    avgLatencyMs: stats.avg_latency_ms ?? null,
+    totalTokens: stats.total_tokens != null ? Number(stats.total_tokens) : null,
+    totalCostUsd: stats.total_cost_usd != null ? Number(stats.total_cost_usd) : null,
+    firstAt: stats.first_at ?? null,
+    lastAt: stats.last_at ?? null,
+  };
+  out.evalRunAt = summary.evalRunAt ?? null;
+  out.lastEvaluatedAt = summary.evalRunAt ?? null;
+
+  res.json(out);
 });
 
 app.post("/ask", rateLimit, accessGate, async (req, res) => {

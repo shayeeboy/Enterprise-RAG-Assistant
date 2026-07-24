@@ -1,0 +1,18 @@
+{
+  "_comment": "Last committed evaluation summary, surfaced live by GET /snapshot for downstream consumers (e.g. the AI Product & Leadership Studio). Operational metrics (latency, grounded rate, cost) come live from /stats; these judged metrics come from the eval harness (npm run eval:judge / npm run eval) and are refreshed when that runs. Keep numbers in sync with the README Phase 4 table.",
+  "evalRunAt": "2026-07-17",
+  "knowledgeFreshnessDays": 12,
+  "metrics": [
+    { "metric": "Faithfulness", "score": 67, "passThreshold": 70, "pass": false, "source": "LLM-judge" },
+    { "metric": "Answer Correctness", "score": 61, "passThreshold": 60, "pass": true, "note": "3.07/5 rescaled to 0-100", "source": "LLM-judge" },
+    { "metric": "Semantic Hit@5", "score": 73, "passThreshold": 70, "pass": true, "source": "LLM-judge" },
+    { "metric": "Out-of-scope Refusal", "score": 80, "passThreshold": 90, "pass": false, "source": "LLM-judge" },
+    { "metric": "Keyword Hit@5", "score": 100, "passThreshold": 80, "pass": true, "source": "keyword-eval" },
+    { "metric": "Citation Validity", "score": 100, "passThreshold": 100, "pass": true, "note": "enforced by construction", "source": "npm run check" }
+  ],
+  "derived": {
+    "retrievalQuality": 73,
+    "citationAccuracy": 100,
+    "hallucinationRate": 33
+  }
+}
