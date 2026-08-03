@@ -1,0 +1,66 @@
+name: Refresh eval summary
+
+# Regenerates the judged retrieval-quality summary (eval/summary.json) that the
+# /snapshot endpoint reports to the Studio (R9). The *operational* half of
+# /snapshot (latency, grounded rate, cost/query, volume) is already LIVE from
+# the observability store on every request and needs no cadence — only the
+# judged eval block is a committed artifact, so only that is refreshed here.
+#
+# npm run eval:judge needs DATABASE_URL (the populated pgvector index) and a
+# hosted judge (JUDGE_API_KEY) — the local ollama default is unavailable in CI.
+# The job skips cleanly when those secrets are absent, so a fork runs it at $0.
+#
+# Note: the live Cloud Run container reads the committed summary.json baked at
+# deploy time, so a refreshed summary reaches the live /snapshot on the next
+# deploy of the service. This workflow keeps the committed source-of-truth current.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly, Monday 06:00 UTC (bounds judge-LLM usage)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: guard
+        env:
+          DB: ${{ secrets.DATABASE_URL }}
+          JUDGE: ${{ secrets.JUDGE_API_KEY }}
+        run: |
+          if [ -n "$DB" ] && [ -n "$JUDGE" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "DATABASE_URL and/or JUDGE_API_KEY not set — skipping eval refresh."
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.run == 'true'
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        if: steps.guard.outputs.run == 'true'
+      - name: Regenerate judged eval summary
+        if: steps.guard.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
+          JUDGE_BASE_URL: ${{ vars.JUDGE_BASE_URL }}
+          JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
+        run: npm run eval:judge
+      - name: Commit refreshed summary if changed
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          if ! git diff --quiet eval/summary.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add eval/summary.json
+            git commit -m "chore: refresh judged eval summary [skip ci]"
+            git push
+          else
+            echo "No eval change."
+          fi

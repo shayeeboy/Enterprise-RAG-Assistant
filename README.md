@@ -465,6 +465,14 @@ Add a `DATABASE_URL` repository secret to also run the full `npm run smoke` and
 `npm run eval` in CI (the LLM step warns rather than fails there, since Ollama
 isn't available in CI).
 
+**Scheduled eval refresh.** [`refresh-eval.yml`](.github/workflows/refresh-eval.yml)
+regenerates the judged [`eval/summary.json`](eval/summary.json) weekly via
+`npm run eval:judge` — the block the `/snapshot` endpoint reports to the Studio.
+It's guarded to skip cleanly unless `DATABASE_URL` + `JUDGE_API_KEY` are set (so a
+fork runs it at $0). The *operational* half of `/snapshot` (latency, grounded rate,
+cost/query, volume) is already live from the observability store per request and
+needs no cadence; the refreshed summary reaches the live container on its next deploy.
+
 ### Acceptance tests (retrieval & trust)
 
 Two automated suites map to the [acceptance criteria](#executive-summary):
