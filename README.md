@@ -161,19 +161,19 @@ automatically (via `.github/workflows/stats.yml`); search individual attempts
 with `npm run logs -- "your term"`, or hit the live `/stats` endpoint.
 
 <!-- STATS:START -->
-_Auto-updated from **78** logged queries · last refresh 2026-08-06._
+_Auto-updated from **79** logged queries · last refresh 2026-08-08._
 
 | Metric | Value |
 |---|---|
-| Total queries | 78 |
-| — real traffic (live) | 53 |
+| Total queries | 79 |
+| — real traffic (live) | 54 |
 | — benchmark traffic (automated) | 25 |
 | Grounded (cited) | 82% |
-| Avg latency | 11,938 ms |
-| p50 / p95 latency | 7,122 / 30,464 ms |
-| Avg stage split — rewrite · retrieve · rerank · llm | 371 · 3,893 · 7,842 · 1,065 ms |
-| Avg tokens / query | 1,854 |
-| Total tokens | 144,584 |
+| Avg latency | 12,128 ms |
+| p50 / p95 latency | 7,184 / 30,418 ms |
+| Avg stage split — rewrite · retrieve · rerank · llm | 371 · 3,987 · 7,931 · 1,070 ms |
+| Avg tokens / query | 1,861 |
+| Total tokens | 146,981 |
 | Total LLM cost | $0.000000 |
 <!-- STATS:END -->
 
