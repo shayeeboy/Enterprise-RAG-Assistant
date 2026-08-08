@@ -163,14 +163,37 @@
     if(examples) examples.remove();
     const thinking = el('msg', `<div class="role">Assistant</div><div class="body hint">Thinking… (retrieving, reranking, reasoning)</div>`);
     log.appendChild(thinking); window.scrollTo(0, document.body.scrollHeight);
-    try{
+    const sleep = ms => new Promise(res=>setTimeout(res, ms));
+    // POST /ask and parse defensively: a cold Cloud Run container (scale-to-zero)
+    // can return a 5xx HTML page while it boots + loads the models, which isn't
+    // JSON. Treat that as a wake-up condition rather than crashing on JSON.parse.
+    async function postAsk(){
       const r = await fetch(`${API_BASE}/ask`, { method:'POST', headers:{'Content-Type':'application/json', ...(ACCESS_CODE?{'x-access-code':ACCESS_CODE}:{})}, body: JSON.stringify({ question: q }) });
-      const res = await r.json();
+      const text = await r.text();
+      let data=null; try{ data = JSON.parse(text); }catch(_){}
+      if(!r.ok || !data){ const e = new Error('backend waking up'); e.coldStart = true; throw e; }
+      return data;
+    }
+    try{
+      let res;
+      try{
+        res = await postAsk();
+      }catch(e){
+        if(e && e.coldStart){
+          const b = thinking.querySelector('.body');
+          if(b) b.textContent = 'The backend is waking up from idle (it scales to zero to stay free). Retrying in ~15s…';
+          await sleep(15000);
+          res = await postAsk(); // one retry once the container is warm
+        } else { throw e; }
+      }
       thinking.remove();
       addAssistant(res);
     }catch(err){
       thinking.remove();
-      addAssistant({ answer:'Request failed: '+err.message });
+      const cold = err && err.coldStart;
+      addAssistant({ answer: cold
+        ? '⏳ The backend is still waking up from idle (the first request after a while can take ~30–60s). Please ask again in a moment.'
+        : 'Request failed: '+err.message });
     }finally{
       send.disabled=false; input.disabled=false; input.focus();
     }
