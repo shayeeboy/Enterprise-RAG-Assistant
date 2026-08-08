@@ -97,6 +97,10 @@
   const API_BASE = (_params.get('api') || window.RAG_API_BASE || '').replace(/\/$/, '');
   const ACCESS_CODE = _params.get('code') || window.RAG_ACCESS_CODE || '';
 
+  // Pre-warm the scale-to-zero backend as soon as the page loads, so it's likely
+  // warm by the time the user asks (fire-and-forget; ignore failures).
+  if(API_BASE){ try{ fetch(API_BASE + '/health', { cache:'no-store' }).catch(()=>{}); }catch(_){} }
+
   const log = document.getElementById('log');
   const form = document.getElementById('form');
   const input = document.getElementById('q');
@@ -164,35 +168,39 @@
     const thinking = el('msg', `<div class="role">Assistant</div><div class="body hint">Thinking… (retrieving, reranking, reasoning)</div>`);
     log.appendChild(thinking); window.scrollTo(0, document.body.scrollHeight);
     const sleep = ms => new Promise(res=>setTimeout(res, ms));
-    // POST /ask and parse defensively: a cold Cloud Run container (scale-to-zero)
-    // can return a 5xx HTML page while it boots + loads the models, which isn't
-    // JSON. Treat that as a wake-up condition rather than crashing on JSON.parse.
+    // POST /ask and parse defensively. A cold Cloud Run container (scale-to-zero)
+    // returns a 5xx HTML page while it boots + loads the models — NOT JSON. Only
+    // a non-JSON body counts as "waking up"; a valid JSON error (even 4xx/5xx) is
+    // a real answer we should show, not a cold start to retry.
     async function postAsk(){
       const r = await fetch(`${API_BASE}/ask`, { method:'POST', headers:{'Content-Type':'application/json', ...(ACCESS_CODE?{'x-access-code':ACCESS_CODE}:{})}, body: JSON.stringify({ question: q }) });
       const text = await r.text();
       let data=null; try{ data = JSON.parse(text); }catch(_){}
-      if(!r.ok || !data){ const e = new Error('backend waking up'); e.coldStart = true; throw e; }
+      if(!data){ const e = new Error('backend waking up'); e.coldStart = true; throw e; }
       return data;
     }
+    // Retry across the whole cold-start window (~up to a minute) so a question
+    // asked while the backend is asleep still lands once it's warm.
+    const RETRIES = 5, GAP_MS = 12000;
     try{
-      let res;
-      try{
-        res = await postAsk();
-      }catch(e){
-        if(e && e.coldStart){
-          const b = thinking.querySelector('.body');
-          if(b) b.textContent = 'The backend is waking up from idle (it scales to zero to stay free). Retrying in ~15s…';
-          await sleep(15000);
-          res = await postAsk(); // one retry once the container is warm
-        } else { throw e; }
+      let res = null;
+      for(let attempt = 1; attempt <= RETRIES && !res; attempt++){
+        try{
+          res = await postAsk();
+        }catch(e){
+          if(e && e.coldStart && attempt < RETRIES){
+            const b = thinking.querySelector('.body');
+            if(b) b.textContent = `The backend is waking up from idle — first request after a while can take up to a minute (attempt ${attempt}/${RETRIES})…`;
+            await sleep(GAP_MS);
+          } else { throw e; }
+        }
       }
       thinking.remove();
       addAssistant(res);
     }catch(err){
       thinking.remove();
-      const cold = err && err.coldStart;
-      addAssistant({ answer: cold
-        ? '⏳ The backend is still waking up from idle (the first request after a while can take ~30–60s). Please ask again in a moment.'
+      addAssistant({ answer: (err && err.coldStart)
+        ? '⏳ The backend didn\'t finish waking up in time. It should be warm now — please ask again.'
         : 'Request failed: '+err.message });
     }finally{
       send.disabled=false; input.disabled=false; input.focus();
