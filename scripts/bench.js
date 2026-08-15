@@ -17,6 +17,7 @@ const { buildBank } = require("../eval/bench-questions");
 const { answerQuestion } = require("../src/rag/pipeline");
 const { logQuery } = require("../src/rag/logstore");
 const { close } = require("../src/rag/db");
+const quota = require("./lib/quota-guard");
 
 const COUNT = Number(process.env.BENCH_COUNT || 40);
 const PACE_MS = Number(process.env.BENCH_PACE_MS || 800);
@@ -36,6 +37,16 @@ function shuffle(a) {
     console.error("DATABASE_URL is not set.");
     process.exit(1);
   }
+  const alreadyExhausted = quota.isExhaustedToday();
+  if (alreadyExhausted) {
+    console.log(
+      `Groq daily token cap (tokens per day) already hit today — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}. ` +
+      `Skipping this run.`
+    );
+    await close();
+    process.exit(0);
+  }
+
   const bank = buildBank();
   // Sample with replacement across the bank so repeated nightly runs vary.
   const batch = shuffle(bank).slice(0, Math.min(COUNT, bank.length));
@@ -55,6 +66,7 @@ function shuffle(a) {
     // A rate-limited generation returns ok:false with the 429 in meta.error.
     const err = res && res.meta && res.meta.error;
     if (err && /429|rate.?limit|tokens per day|TPD/i.test(err)) {
+      if (quota.isDailyCapError(err)) quota.markExhausted("bench", err);
       console.log(`  [${i + 1}] rate-limited (daily quota spent) — stopping, ${logged} logged so far`);
       break;
     }
@@ -72,6 +84,7 @@ function shuffle(a) {
   process.exit(0);
 })().catch(async (e) => {
   console.error("bench failed:", e.message);
+  if (quota.isDailyCapError(e.message)) quota.markExhausted("bench", e.message);
   try { await close(); } catch {}
   process.exit(1);
 });

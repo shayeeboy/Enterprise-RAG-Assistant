@@ -11,5 +11,9 @@ data/chunks/all_chunks.embedded.json
 # Generated LLM-judge results — regenerable via `npm run eval:judge`
 eval/judge-results.json
 
+# Local run state — checkpoint/resume + shared Groq daily-cap coordination
+eval/.judge-checkpoint.json
+eval/.groq-quota-state.json
+
 # Local-only reproducibility archive — never tracked/cloned/forked
 .git_prompts/

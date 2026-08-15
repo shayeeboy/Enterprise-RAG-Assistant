@@ -21,6 +21,27 @@ const { answerQuestion } = require("../src/rag/pipeline");
 const { judgeCase, judgeSettings, formatJudgeInput, JUDGE_SYSTEM_PROMPT } = require("../src/rag/judge");
 const cfg = require("../src/rag/config");
 const { close } = require("../src/rag/db");
+const quota = require("./lib/quota-guard");
+
+// --- Checkpoint/resume across the Groq daily-token-cap (TPD) ---
+// One full 22-question run costs more tokens than the free-tier daily cap, so
+// a run that gets rate-limited partway through saves progress here and the
+// next scheduled run (once the cap resets) picks up the remaining questions
+// instead of restarting from zero. Cleared once a full cycle completes.
+const CHECKPOINT_PATH = path.join(__dirname, "..", "eval", ".judge-checkpoint.json");
+function loadCheckpoint() {
+  try {
+    return JSON.parse(fs.readFileSync(CHECKPOINT_PATH, "utf8"));
+  } catch {
+    return { results: [], refusedAnswerable: [], refusalRows: [], usageTotal: { prompt: 0, completion: 0, total: 0 }, startedAt: new Date().toISOString() };
+  }
+}
+function saveCheckpoint(state) {
+  fs.writeFileSync(CHECKPOINT_PATH, JSON.stringify(state, null, 2));
+}
+function clearCheckpoint() {
+  try { fs.unlinkSync(CHECKPOINT_PATH); } catch {}
+}
 
 // --- Near-term roadmap goals (reported; the next milestone we're driving to) ---
 // See the "Improvement roadmap" table in the README for the actions behind each
@@ -115,9 +136,31 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     (settings.model !== cfg.LLM_MODEL ? "  (cross-judge)" : "  (self-judge)"));
   console.log("");
 
-  const results = [];
-  const refusedAnswerable = [];
-  let usageTotal = { prompt: 0, completion: 0, total: 0 };
+  const alreadyExhausted = quota.isExhaustedToday();
+  if (alreadyExhausted) {
+    console.log(
+      `Groq daily token cap (tokens per day) already hit today — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}. ` +
+      `Skipping this run to avoid wasting retries; progress is checkpointed and will resume automatically once the cap resets.`
+    );
+    await close();
+    process.exit(1);
+  }
+
+  const checkpoint = loadCheckpoint();
+  const results = checkpoint.results.slice();
+  const refusedAnswerable = checkpoint.refusedAnswerable.slice();
+  const refusalRows = checkpoint.refusalRows.slice();
+  let usageTotal = { ...checkpoint.usageTotal };
+  const persist = () => saveCheckpoint({ results, refusedAnswerable, refusalRows, usageTotal, startedAt: checkpoint.startedAt });
+
+  const doneAnswerableIds = new Set([...results.map((r) => r.id), ...refusedAnswerable.map((r) => r.id)]);
+  const doneOutOfScopeIds = new Set(refusalRows.map((r) => r.id));
+  if (doneAnswerableIds.size || doneOutOfScopeIds.size) {
+    console.log(
+      `Resuming from checkpoint: ${doneAnswerableIds.size}/${answerable.length} answerable graded, ` +
+      `${doneOutOfScopeIds.size}/${unanswerable.length} out-of-scope checked.\n`
+    );
+  }
 
   // --- Answerable: judge faithfulness / correctness / semantic Hit@5 ---
   // If the pipeline REFUSES an answerable question (grounded=false — e.g. the
@@ -126,11 +169,13 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   // score it as a hallucination + correctness 0 — double-penalising a correct
   // "I don't know". So we record refusals separately as a COVERAGE figure and
   // do NOT feed them to the answer-quality judge.
-  for (const q of answerable) {
+  const remainingAnswerable = answerable.filter((q) => !doneAnswerableIds.has(q.id));
+  for (const q of remainingAnswerable) {
     const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
     if (res.grounded === false) {
       refusedAnswerable.push({ id: q.id, question: q.question });
       console.log(`  REFUSED (coverage miss, not graded)  — ${q.question}`);
+      persist();
       await sleep(300);
       continue;
     }
@@ -155,21 +200,26 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
       `  ${m.hallucination_detected ? "HALLU" : "faith"} | correct ${m.answer_correctness_score}/5 | ` +
       `hit@5 ${m.hit5_retrieval_pass ? "PASS" : "FAIL"}  — ${q.question}`
     );
+    persist();
     await sleep(500); // gentle pacing for the free tier
   }
 
   // --- Out-of-scope: deterministic refusal check ---
   console.log("");
-  let refused = 0;
-  const refusalRows = [];
-  for (const q of unanswerable) {
+  const remainingUnanswerable = unanswerable.filter((q) => !doneOutOfScopeIds.has(q.id));
+  for (const q of remainingUnanswerable) {
     const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
     const ok = res.grounded === false;
-    if (ok) refused++;
     refusalRows.push({ id: q.id, question: q.question, refused: ok });
     console.log(`  ${ok ? "REFUSED " : "ANSWERED"}  — ${q.question}`);
+    persist();
     await sleep(500);
   }
+  const refused = refusalRows.filter((r) => r.refused).length;
+
+  // Both loops ran to completion (no throw) — the full cycle is covered, so
+  // the checkpoint is no longer needed. A future run starts a fresh cycle.
+  clearCheckpoint();
 
   // --- Aggregate (answer-quality metrics are over ANSWERED questions only;
   //     refused answerable questions are reported separately as coverage) ---
@@ -230,6 +280,7 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   process.exit(pass ? 0 : 1);
 })().catch(async (e) => {
   console.error("\neval:judge failed:", e.message);
+  if (quota.isDailyCapError(e.message)) quota.markExhausted("eval:judge", e.message);
   try { await close(); } catch {}
   process.exit(1);
 });
