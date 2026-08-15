@@ -21,7 +21,7 @@ backend (Express + local retrieval/rerank) with **Groq** doing the reasoning and
 
 - Ask things like *"How do I build finger independence?"* or *"What exercises help weak 4th and 5th fingers?"*
 - Every answer cites its sources (book + page) and shows a live latency/tokens/cost line.
-- **Heads-up:** the backend scales to zero, so the first request after idle takes ~30 s to wake; subsequent ones are fast.
+- **Heads-up:** the backend scales to zero, so the first request after idle wakes it (~15–30 s). The page pre-warms it on load and shows a "waking up…" spinner with auto-retry, so a cold start is just a slower first answer, not an error; subsequent requests are fast.
 
 ---
 
@@ -68,7 +68,7 @@ corpus; that lifecycle is the transferable part.
 
 - **System health** — measured live, per request, via built-in observability persisted to a searchable Neon table.
   - **Tracked:** latency (p50/p95), token cost, and "grounded rate" (does every answer carry a citation).
-  - **Current:** 100% grounded · $0 LLM cost (Groq free tier) · latency tracked live — see [Live observability](#live-observability).
+  - **Current:** $0 LLM cost (Groq free tier); grounded rate (~82% — the rest are honest refusals, since the benchmark deliberately includes thin-coverage / out-of-scope questions the assistant declines) and latency tracked live — see [Live observability](#live-observability).
   - **Made statistically meaningful:** an automated benchmark (`npm run bench`, a 120-question bank) drives realistic queries through the real pipeline, so the figures rest on a large sample rather than a handful of hits.
   - **Kept honest:** benchmark traffic is tagged and counted separately from organic `live` queries — test traffic by design, not a claim of real-world usage.
 - **Retrieval quality** — because "grounded" only confirms an answer *has* a citation, not that it cites the *right* passage.
@@ -84,7 +84,7 @@ each with how it's verified and where the automated test lives:
 | Retrieval hit rate (Hit@5) | ≥ 80% of benchmark questions surface a relevant passage in the top 5 | **100% (8/8)** | `npm run eval` |
 | Rank quality (MRR) | higher is better | **0.938** | `npm run eval` |
 | Out-of-scope refusal | 100% of out-of-KB questions refused, none answered from irrelevant context | **100% (2/2)** | `npm run eval` |
-| Groundedness | every *answered* question carries ≥ 1 valid citation | **100% grounded** (live) | observability · `/stats` |
+| Groundedness | every *answered* question carries ≥ 1 valid citation (refusals count as ungrounded) | **~82%** of all logged queries grounded (the rest are refusals) | observability · `/stats` |
 | Citation validity | every `[n]` resolves to a real retrieved chunk (title + page); invalid markers dropped | enforced by construction | `npm run check` |
 | Latency | p50 / p95 tracked and visible | tracked live — see [Live observability](#live-observability) | observability · `/stats` |
 | Cost / query | tracked | **$0** (Groq free tier) | observability · `/stats` |
@@ -777,7 +777,9 @@ Enterprise-RAG-Assistant/
 │   ├── 06_query.js            ← Phase 2: ask a question from the CLI
 │   ├── check.js               ← offline wiring/logic checks (npm run check)
 │   ├── smoke.js               ← full DB+models+LLM health check (npm run smoke)
-│   └── eval-judge.js          ← Phase 4 LLM-judge harness (npm run eval:judge)
+│   ├── eval-judge.js          ← Phase 4 LLM-judge harness — checkpoint/resume across the daily cap (npm run eval:judge)
+│   ├── bench.js               ← observability benchmark load (npm run bench)
+│   └── lib/quota-guard.js     ← shares the Groq daily-cap (TPD) state between eval:judge & bench
 ├── src/rag/                   ← Phase 2 query library (one module per stage)
 │   ├── pipeline.js            ← orchestrates the full workflow
 │   ├── rewrite.js  embed.js  retrieve.js  rerank.js
@@ -792,7 +794,7 @@ Enterprise-RAG-Assistant/
 ├── public/index.html         ← minimal chat front end (RAG_API_BASE aware)
 ├── public/pdfs/              ← self-hosted source PDFs for clickable citations
 ├── .env.example
-├── .github/workflows/ci.yml
+├── .github/workflows/        ← ci.yml · pages.yml · stats.yml · refresh-eval.yml
 └── sql/schema.sql
 ```
 
@@ -853,6 +855,7 @@ resolved them.
 | HF Docker Spaces needed a paid plan (only static is free) | Pivoted the backend to **Google Cloud Run**, which runs the Dockerfile unchanged on its free tier. Don't assume a "free Docker host" — check the plan before committing. |
 | Cloud Run `/ask` OOM-killed (503) at 2 GiB | Cloud Run's filesystem is **in-memory**, so the runtime model download counts against RAM. Fixed by raising to 4 GiB and baking the models into the image at build (`scripts/warmup.js`) so nothing downloads at runtime. |
 | `Gaia id not found for email …` in Cloud Shell | Harmless background-telemetry error — the deploy still succeeds. Don't chase it. |
+| Cold start showed users `Unexpected token '<'` | Scale-to-zero (the $0 choice) means the first request after idle hits a booting container and gets a 5xx **HTML** page, which the UI blindly parsed as JSON. Root cause was a **Cloud Run cold start**, not Neon (which wakes sub-second). Fixed on both ends: the server **eagerly loads the embed + reranker models at startup** (not lazily on the first `/ask`) and reports `models: ready` on `/health`; the frontend **pre-warms** on page load and **retries across the cold-start window** with a "waking up…" spinner, treating only a non-JSON body as a wake-up (real JSON errors are shown as-is). Lesson: for a scale-to-zero backend, make a cold start a graceful *slow*, not an error — on both the client and the server. |
 
 **Phase 4 — LLM-Judge evaluation**
 
@@ -863,6 +866,7 @@ resolved them.
 | Judge falsely flagged hallucinations on `[6]` citations | The judge saw only the top-5 chunks while the generator prompts with top-6, so valid citations to `[6]` were scored as fabrications. The judge's *own reasoning traces* exposed the bug. Fixed by showing the judge the exact top-K the generator used — the judge must see precisely what the model saw. |
 | Making answers more complete broke refusal (100% → 50%) | A "cover the key points" prompt made the model stretch an unrelated chunk into an answer for "capital of France." Scoping completeness to in-scope questions and re-emphasizing refusal restored it to 100%. Completeness and refusal pull in opposite directions — tune for both, and measure both. |
 | Groq free-tier **daily token cap** hit mid-iteration | Five eval runs exhausted the generator's 100k-tokens/day limit; the pipeline swallowed the 429 and returned an error string, which the judge scored as 0 — silent garbage. Hardened the harness to **abort loudly** on a rate-limited generation, and made `eval/judge-results.json` a regenerable, gitignored artifact. |
+| A full eval doesn't fit in one day's free quota | The 22-question judge run needs ~40k Groq tokens, but the free tier caps at 100k/day and other tasks share the key — so a single run often hit the cap mid-way and produced nothing usable. Added **per-question checkpoint/resume** (`eval:judge` persists after each question and resumes on the next run, writing a complete `eval/judge-results.json` only when the whole cycle finishes) plus a shared **`quota-guard`** so eval and bench skip immediately once either trips the daily cap — distinguishing the recoverable per-minute limit (TPM) from the unrecoverable daily one (TPD). A complete measurement now accrues across runs/days instead of being all-or-nothing. |
 | An LLM judge is not perfectly deterministic | Even at temperature 0 the judge flipped a few individual verdicts between runs while the aggregate stayed steady. Treat the judge as a strong signal, not an oracle: report aggregates, gate CI on generous **regression floors**, and keep the fast keyword eval as a cheap complement. |
 | Strict sentence-level NLI is aggressive | A local NLI entailment filter scores clean pairs correctly (≈0.97 entailed vs ≈0.00 unrelated), but real answer sentences that fold a supported fact into a light recommendation ("…so don't force it") score low and get flagged as unsupported. Shipped it **opt-in** (`ENFORCE_ENTAILMENT`, default off), with citation markers stripped before scoring and a safety net that never guts an answer — but the threshold needs tuning against the eval before it belongs in the default path. Build the mechanism, verify it, then measure before trusting it. |
 | Adversarial near-misses defeat a score threshold | The expanded set's near-misses (piano history, self-tuning, jazz) score **as high on the reranker as valid questions** (0.97–1.0) — their chunks are topically piano-related — so no relevance-floor value separates them from thin-coverage in-scope questions (0.04–0.29). Fixed with an **answerability gate**: a focused LLM YES/NO on whether the chunks actually answer *this* question, kept separate from the "be helpful" generation step (which kept rationalizing an answer). Also: validate on the **real pipeline path** — an early test skipped query-rewrite and mis-measured the gate, because rewrite changes which chunks it sees. Lesson: topical relevance ≠ answerability; that judgement needs an LLM, not a score. |
