@@ -73,6 +73,29 @@ function accessGate(req, res, next) {
   return res.status(401).json({ ok: false, answer: "Access code required or incorrect." });
 }
 
+// --- Eager model warm-up ---
+// Load the local embed + reranker models at startup (in the background, so it
+// doesn't block app.listen) so the FIRST real /ask isn't stuck loading ~1 GB of
+// models — the main Cloud Run cold-start cost. /health reports readiness, and the
+// frontend pre-warm ping to /health kicks the whole container awake early.
+let modelsReady = false;
+let modelsError = null;
+(async () => {
+  try {
+    const { embedQuery } = require("./src/rag/embed");
+    const { rerank } = require("./src/rag/rerank");
+    await embedQuery("warmup");
+    await rerank("warmup", [
+      { text: "warmup passage", title: "t", page_start: 1, page_end: 1, content_type: "x" },
+    ]);
+    modelsReady = true;
+    console.log("models warm: embed + reranker loaded");
+  } catch (e) {
+    modelsError = e.message;
+    console.warn("model warm-up failed (will lazy-load on demand):", e.message);
+  }
+})();
+
 app.get("/health", async (_req, res) => {
   const out = { status: "ok", provider: cfg.LLM_PROVIDER, model: cfg.LLM_MODEL };
   try {
@@ -83,6 +106,7 @@ app.get("/health", async (_req, res) => {
     out.status = "degraded";
   }
   out.llm = (await ping()) ? "reachable" : "unreachable";
+  out.models = modelsReady ? "ready" : modelsError ? "error" : "loading";
   res.json(out);
 });
 
