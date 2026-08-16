@@ -8,8 +8,10 @@ node_modules/
 # Generated embedding output — ~30MB of vectors, regenerable via `npm run embed`
 data/chunks/all_chunks.embedded.json
 
-# Generated LLM-judge results — regenerable via `npm run eval:judge`
+# Generated eval intermediates — folded into eval/summary.json by
+# `npm run eval:summary` (which IS committed); these are regenerable.
 eval/judge-results.json
+eval/keyword-results.json
 
 # Local run state — checkpoint/resume + shared Groq daily-cap coordination
 eval/.judge-checkpoint.json

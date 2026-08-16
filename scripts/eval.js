@@ -90,6 +90,19 @@ const isRelevant = (chunk, kws) => {
   const refusalOk = refusalRate == null || refusalRate >= REFUSE_TARGET;
   const pass = hitRate >= HIT_TARGET && refusalOk;
   console.log(`\n${pass ? "PASS" : "FAIL"}  (targets: Hit@${K} >= ${HIT_TARGET * 100}%, refusal = ${REFUSE_TARGET * 100}% when tested)`);
+
+  // Persist the keyword Hit@5 so `npm run eval:summary` can fold it into
+  // eval/summary.json (the file GET /snapshot serves). Written even on FAIL.
+  fs.writeFileSync(
+    path.join(__dirname, "..", "eval", "keyword-results.json"),
+    JSON.stringify(
+      { at: new Date().toISOString(), keywordHit5: Number(hitRate.toFixed(3)), mrr: Number(mrr.toFixed(3)), hits, total: answerable.length, k: K },
+      null,
+      2,
+    ) + "\n",
+  );
+  console.log("Wrote eval/keyword-results.json");
+
   await close();
   process.exit(pass ? 0 : 1);
 })().catch(async (e) => {

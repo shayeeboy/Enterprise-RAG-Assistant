@@ -123,8 +123,9 @@ app.get("/stats", async (_req, res) => {
 // A stable, machine-readable health snapshot for downstream consumers (e.g. the
 // AI Product & Leadership Studio). Operational metrics (latency, grounded rate,
 // cost/query, volume) are LIVE from the observability store; the judged quality
-// metrics come from the last eval run (eval/summary.json, refreshed by
-// `npm run eval:judge`). Shape matches the Studio's RagHealthSnapshot contract.
+// metrics + knowledge freshness come from eval/summary.json, which is GENERATED
+// by `npm run eval:summary` from the eval run (never hand-edited). Shape matches
+// the Studio's RagHealthSnapshot contract.
 app.get("/snapshot", async (_req, res) => {
   const out = {
     productId: "enterprise-rag",

@@ -6,13 +6,17 @@ name: Refresh eval summary
 # the observability store on every request and needs no cadence — only the
 # judged eval block is a committed artifact, so only that is refreshed here.
 #
-# npm run eval:judge needs DATABASE_URL (the populated pgvector index) and a
-# hosted judge (JUDGE_API_KEY) — the local ollama default is unavailable in CI.
-# The job skips cleanly when those secrets are absent, so a fork runs it at $0.
+# It runs the eval chain and regenerates eval/summary.json via the generator
+# (scripts/build-eval-summary.js) — the eval numbers AND the real knowledge
+# freshness — then commits it. Needs DATABASE_URL (the populated pgvector index)
+# and a hosted judge (JUDGE_API_KEY) — the local ollama default is unavailable
+# in CI. Skips cleanly when those secrets are absent, so a fork runs it at $0.
 #
 # Note: the live Cloud Run container reads the committed summary.json baked at
-# deploy time, so a refreshed summary reaches the live /snapshot on the next
-# deploy of the service. This workflow keeps the committed source-of-truth current.
+# deploy time, so a refreshed summary reaches the live /snapshot only on the next
+# deploy of the service (`gcloud run deploy rag-assistant --source . --region
+# us-central1`). This workflow keeps the committed source-of-truth current; wire
+# a deploy step here if/when GCP deploy credentials live in repo secrets.
 on:
   schedule:
     - cron: "0 6 * * 1"   # weekly, Monday 06:00 UTC (bounds judge-LLM usage)
@@ -44,14 +48,17 @@ jobs:
           cache: npm
       - run: npm ci
         if: steps.guard.outputs.run == 'true'
-      - name: Regenerate judged eval summary
+      - name: Regenerate eval summary (keyword + judge → summary.json)
         if: steps.guard.outputs.run == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
           JUDGE_BASE_URL: ${{ vars.JUDGE_BASE_URL }}
           JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
-        run: npm run eval:judge
+        run: |
+          npm run eval || true    # keyword Hit@5 → eval/keyword-results.json (don't abort on threshold FAIL)
+          npm run eval:judge      # judged metrics → eval/judge-results.json
+          npm run eval:summary    # fold both + live KB freshness → eval/summary.json
       - name: Commit refreshed summary if changed
         if: steps.guard.outputs.run == 'true'
         run: |
