@@ -3,8 +3,9 @@
  *
  * The rerank relevance floor refuses questions where nothing piano-related is
  * retrieved. It cannot refuse "near-miss" questions — piano/music-adjacent but
- * uncovered topics (piano history, self-tuning, jazz improvisation) — because
- * their retrieved chunks are topically piano-related and score HIGH on the
+ * uncovered topics (e.g. the instrument's history/construction, reading staff
+ * notation, another instrument) — because their retrieved chunks are topically
+ * piano-related and score HIGH on the
  * reranker (0.97–1.0), as high as valid questions. The only reliable signal is
  * whether the chunks actually ANSWER the specific question, so this is a small,
  * focused LLM call that returns a strict YES/NO — deliberately separate from the
@@ -23,8 +24,8 @@ const GATE_SYSTEM =
   "- Answer YES if the sources address the question's subject and contain relevant, " +
   "usable information that helps answer it, even if the coverage is partial.\n" +
   "- Answer NO if the sources are about a genuinely different subject (for example " +
-  "piano history, tuning or repair, jazz or improvisation, reading sheet-music " +
-  "notation, or another instrument), OR if they only mention the question's topic " +
+  "the instrument's history or construction, reading sheet-music notation, or " +
+  "another instrument), OR if they only mention the question's topic " +
   "in passing without explaining how to do or understand what is asked — even if " +
   "they mention the piano.\n" +
   "Do not explain.";

@@ -143,7 +143,7 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
 
   // 8b. Answerability gate — a focused LLM YES/NO on whether the top chunks
   // actually answer THIS question. Catches near-miss out-of-scope questions
-  // (piano history, tuning, jazz) that score high on topical relevance but
+  // (e.g. the piano's history/construction, reading notation) that score high on topical relevance but
   // aren't covered, which the rerank floor can't separate. Fail-open.
   if (cfg.ANSWERABILITY_GATE) {
     const answerable = await span(trace, "gate", () => isAnswerable(question, top));

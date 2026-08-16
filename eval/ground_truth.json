@@ -141,17 +141,17 @@
     "ground_truth": "Out of scope (adversarial near-miss). This knowledge base is about piano practice and technique, not the instrument's history, invention, or evolution. Even though it's piano-related, the correct behavior is to refuse — the history of the piano is not covered here, and the system must not stitch practice-technique chunks into a history answer."
   },
   {
-    "id": "oos-tune-piano",
+    "id": "tune-piano",
     "question": "How do I tune a piano myself?",
-    "answerable": false,
-    "keywords": [],
-    "ground_truth": "Out of scope (adversarial near-miss). The knowledge base mentions that a piano should be tuned regularly but does not explain how to tune one (pin setting, temperament, using a tuning lever). The correct behavior is to refuse rather than fabricate a tuning procedure from unrelated practice-technique passages."
+    "answerable": true,
+    "keywords": ["tun", "tuning fork", "Reblitz"],
+    "ground_truth": "Chang's book includes a chapter for those who have never tuned a piano and want to see if they are up to the task. It stresses that tuning is difficult — one of the hardest steps is tuning the piano to the tuning fork, partly because the fork's frequency differs from the target note — and points readers to Arthur Reblitz's 'Piano Servicing, Tuning, and Rebuilding' as a fuller reference. It also notes that home pianos go out of tune almost constantly, starting the moment the tuner leaves. A correct answer draws on this tuning material rather than refusing; it need not (and should not) invent procedure details the book does not give."
   },
   {
-    "id": "oos-jazz-improv",
+    "id": "jazz-improv",
     "question": "How do I play jazz improvisation?",
-    "answerable": false,
-    "keywords": [],
-    "ground_truth": "Out of scope (adversarial near-miss). This knowledge base covers classical piano practice and technique (Chang, Hanon); jazz improvisation — voicings, ii-V-I patterns, soloing over changes — is not in it. The correct behavior is to refuse rather than improvise an answer from technique chunks."
+    "answerable": true,
+    "keywords": ["jazz", "improvis", "chords", "fake book"],
+    "ground_truth": "Chang recommends that every pianist learn popular music, jazz, cocktail music, playing from fake books, and improvisation. The general approach he describes is to practice the chords and scales enough that, given a melody, you can 'feel' the right and wrong chords that go with it — a skill that comes from a lot of playing and is closely tied to playing by ear and to composition. The book gives this general improvisation approach rather than jazz-specific theory (voicings, ii-V-I patterns, soloing over changes), so a good answer draws on that material and can note where the coverage stops, rather than refusing outright."
   }
 ]

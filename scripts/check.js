@@ -85,7 +85,7 @@ const gt = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "eval", "ground
 assert.ok(Array.isArray(gt) && gt.length >= 20, "ground-truth set should have >= 20 cases");
 const answerable = gt.filter((q) => q.answerable);
 assert.ok(answerable.length >= 15, "expected >= 15 answerable cases");
-assert.ok(gt.filter((q) => !q.answerable).length >= 4, "expected >= 4 out-of-scope cases");
+assert.ok(gt.filter((q) => !q.answerable).length >= 3, "expected >= 3 out-of-scope cases");
 assert.ok(answerable.every((q) => typeof q.ground_truth === "string" && q.ground_truth.length > 40), "every answerable case needs a substantive golden answer");
 assert.ok(gt.some((q) => !q.answerable), "must include out-of-scope cases");
 assert.ok(new Set(gt.map((q) => q.id)).size === gt.length, "case ids must be unique");
