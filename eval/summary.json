@@ -1,18 +1,19 @@
 {
   "_comment": "Last committed evaluation summary, surfaced live by GET /snapshot for downstream consumers (e.g. the AI Product & Leadership Studio). Operational metrics (latency, grounded rate, cost) come live from /stats; these judged metrics come from the eval harness (npm run eval:judge / npm run eval) and are refreshed when that runs. Keep numbers in sync with the README Phase 4 table.",
-  "evalRunAt": "2026-07-17",
+  "_syncGapNote": "2026-08-15: npm run eval:judge completed a full cycle (first since the checkpoint/resume wiring landed, commits e37be8c/d19e857) and its numbers were written into README.md's Phase 4 table by commit 7e0cf1a — but that commit forgot to also update THIS file, so GET /snapshot kept serving the stale 2026-07-17 numbers (Faithfulness 67, OOS-Refusal 80) to downstream consumers even though the run had succeeded. Fixed here to match README/eval/judge-results.json. Lesson for any agent editing the README Phase 4 table: this file is hand-maintained and does NOT auto-update from npm run eval:judge (that script only writes eval/judge-results.json, which is gitignored) — always update this file in the same commit as the README Phase 4 table.",
+  "evalRunAt": "2026-08-15",
   "knowledgeFreshnessDays": 12,
   "metrics": [
-    { "metric": "Faithfulness", "score": 67, "passThreshold": 70, "pass": false, "source": "LLM-judge" },
-    { "metric": "Answer Correctness", "score": 61, "passThreshold": 60, "pass": true, "note": "3.07/5 rescaled to 0-100", "source": "LLM-judge" },
-    { "metric": "Semantic Hit@5", "score": 73, "passThreshold": 70, "pass": true, "source": "LLM-judge" },
-    { "metric": "Out-of-scope Refusal", "score": 80, "passThreshold": 90, "pass": false, "source": "LLM-judge" },
+    { "metric": "Faithfulness", "score": 81, "passThreshold": 70, "pass": true, "source": "LLM-judge" },
+    { "metric": "Answer Correctness", "score": 60, "passThreshold": 60, "pass": true, "note": "3.00/5 rescaled to 0-100", "source": "LLM-judge" },
+    { "metric": "Semantic Hit@5", "score": 63, "passThreshold": 70, "pass": false, "note": "10/16", "source": "LLM-judge" },
+    { "metric": "Out-of-scope Refusal", "score": 100, "passThreshold": 90, "pass": true, "note": "3/3, corrected 3-question set", "source": "LLM-judge" },
     { "metric": "Keyword Hit@5", "score": 100, "passThreshold": 80, "pass": true, "source": "keyword-eval" },
     { "metric": "Citation Validity", "score": 100, "passThreshold": 100, "pass": true, "note": "enforced by construction", "source": "npm run check" }
   ],
   "derived": {
-    "retrievalQuality": 73,
+    "retrievalQuality": 63,
     "citationAccuracy": 100,
-    "hallucinationRate": 33
+    "hallucinationRate": 19
   }
 }
