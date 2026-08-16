@@ -136,11 +136,12 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     (settings.model !== cfg.LLM_MODEL ? "  (cross-judge)" : "  (self-judge)"));
   console.log("");
 
-  const alreadyExhausted = quota.isExhaustedToday();
+  const alreadyExhausted = quota.isExhausted();
   if (alreadyExhausted) {
     console.log(
-      `Groq daily token cap (tokens per day) already hit today — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}. ` +
-      `Skipping this run to avoid wasting retries; progress is checkpointed and will resume automatically once the cap resets.`
+      `Groq daily token cap (tokens per day) still recovering — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}, ` +
+      `won't clear until ~${alreadyExhausted.retryAt}. Skipping this run to avoid wasting retries; progress is checkpointed ` +
+      `and will resume automatically once the cap clears.`
     );
     await close();
     process.exit(1);

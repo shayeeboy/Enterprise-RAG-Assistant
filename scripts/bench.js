@@ -37,11 +37,11 @@ function shuffle(a) {
     console.error("DATABASE_URL is not set.");
     process.exit(1);
   }
-  const alreadyExhausted = quota.isExhaustedToday();
+  const alreadyExhausted = quota.isExhausted();
   if (alreadyExhausted) {
     console.log(
-      `Groq daily token cap (tokens per day) already hit today — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}. ` +
-      `Skipping this run.`
+      `Groq daily token cap (tokens per day) still recovering — tripped by ${alreadyExhausted.by} at ${alreadyExhausted.at}, ` +
+      `won't clear until ~${alreadyExhausted.retryAt}. Skipping this run.`
     );
     await close();
     process.exit(0);
