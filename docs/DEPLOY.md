@@ -60,7 +60,7 @@ gcloud run deploy rag-assistant \
   --source . --region us-central1 \
   --memory 4Gi --cpu 2 --timeout 600 --min-instances 0 \
   --allow-unauthenticated \
-  --set-env-vars LLM_PROVIDER=openai-compatible,LLM_BASE_URL=https://api.groq.com/openai/v1,LLM_MODEL=llama-3.3-70b-versatile,ALLOWED_ORIGINS=https://shayeeboy.github.io \
+  --set-env-vars LLM_PROVIDER=openai-compatible,LLM_BASE_URL=https://api.groq.com/openai/v1,LLM_MODEL=openai/gpt-oss-120b,ALLOWED_ORIGINS=https://shayeeboy.github.io \
   --set-secrets DATABASE_URL=rag-database-url:latest,LLM_API_KEY=rag-groq-key:latest
 ```
 
@@ -107,7 +107,7 @@ files to put in the Space are ready in [`deploy/huggingface/`](../deploy/hugging
 3. **Settings → Variables and secrets** → add:
    - `DATABASE_URL` = your Neon string *(secret)*
    - `LLM_API_KEY` = your Groq key *(secret)*
-   - `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=llama-3.3-70b-versatile`
+   - `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=openai/gpt-oss-120b`
    - `ALLOWED_ORIGINS=https://shayeeboy.github.io`
    - *(optional)* `ACCESS_CODE=<something>` *(secret)*
 4. The Space builds and serves at `https://<user>-<space>.hf.space`. Use that as

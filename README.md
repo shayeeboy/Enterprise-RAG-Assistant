@@ -557,6 +557,9 @@ LLM_BASE_URL=https://api.groq.com/openai/v1
 LLM_API_KEY=gsk_...            # free key from https://console.groq.com
 LLM_MODEL=llama-3.3-70b-versatile
 ```
+> Groq later deprecated `llama-3.3-70b-versatile`; the live config now runs
+> `openai/gpt-oss-120b` (see [Tools and services](#tools-and-services)). The
+> A/B numbers below are the original Phase 3 measurement and are left as-is.
 
 **Measured A/B** (same question, retrieval unchanged), plus the reranker tuning
 (`RERANK_INPUT` 20 → 10):
@@ -659,9 +662,10 @@ Out-of-scope questions are checked separately for correct **refusal**.
   rubric prompt (embedded verbatim in [`src/rag/judge.js`](src/rag/judge.js)) and
   emits strict JSON. An LLM judge is still not a perfect oracle — see the variance
   note in *Lessons learned*.
-- **Cross-model judging:** the generator is `llama-3.3-70b-versatile`; the judge
-  is a **different** model, `openai/gpt-oss-120b`, to blunt the self-preference
-  bias a model has when grading its own output.
+- **Cross-model judging:** the generator is `openai/gpt-oss-120b`; the judge
+  is a **different** model, `openai/gpt-oss-20b`, to blunt the self-preference
+  bias a model has when grading its own output. (Updated 2026-08-17 after Groq
+  deprecated the original generator, `llama-3.3-70b-versatile`.)
 - **$0:** the judge reuses the same Groq free tier as generation; a token-aware
   sliding-window limiter paces calls under the model's tokens-per-minute cap.
 - **Faithful generation:** answers are generated at **temperature 0** and passed
@@ -689,6 +693,9 @@ Out-of-scope questions are checked separately for correct **refusal**.
 
 Generator `llama-3.3-70b-versatile`, judge `openai/gpt-oss-120b` (temp 0),
 over 19 answerable + 3 out-of-scope questions:
+> Recorded before the 2026-08-17 model swap (Groq deprecated the generator
+> above). Left as the last reference run; not yet re-measured against the
+> current `openai/gpt-oss-120b` generator / `openai/gpt-oss-20b` judge pair.
 
 | Metric | Result | Near-term goal | Met? |
 |---|---|---|---|
@@ -822,7 +829,7 @@ Enterprise-RAG-Assistant/
 | Reranking | **Transformers.js** + `bge-reranker-base` (local cross-encoder) | Free, no API key; big precision gain over first-stage retrieval |
 | Faithfulness filter | **Transformers.js** + `nli-deberta-v3-small` (local NLI cross-encoder, opt-in) | Checks the retrieved context entails each answer sentence; drops unsupported claims. Free, no key; `ENFORCE_ENTAILMENT` |
 | Answerability gate | **Groq** free tier (focused YES/NO prompt) via `gate.js` | Refuses near-miss out-of-scope questions the rerank floor can't (topically relevant but uncovered); `ANSWERABILITY_GATE` |
-| LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`llama-3.3-70b-versatile`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER` |
+| LLM reasoning | **Ollama** (local `llama3.2:3b`) or **Groq** free tier (`openai/gpt-oss-120b`, OpenAI-compatible) | Local = fully offline; Groq = ~180× faster LLM stage at $0 (Phase 3 choice). Pluggable via `LLM_PROVIDER`. Model updated 2026-08-17 after Groq deprecated `llama-3.3-70b-versatile` |
 | API + UI | Express + static chat page (`server.js`, `public/`) | CORS/rate-limit/access-code hardened; same Node stack throughout |
 | Backend hosting | **Google Cloud Run** (free tier, scale-to-zero) | Runs the Dockerfile unchanged at 1–4 GiB; chosen after HF Docker (paid) and Render (512 MB, too small) |
 | Frontend hosting | **GitHub Pages** (Actions deploy) | Static chat UI; points at the backend via `?api=` |

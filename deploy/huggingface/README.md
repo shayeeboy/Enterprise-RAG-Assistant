@@ -25,7 +25,7 @@ code, use the Space's **Factory rebuild**.
 | `LLM_PROVIDER` | `openai-compatible` | variable |
 | `LLM_BASE_URL` | `https://api.groq.com/openai/v1` | variable |
 | `LLM_API_KEY` | your Groq key | secret |
-| `LLM_MODEL` | `llama-3.3-70b-versatile` | variable |
+| `LLM_MODEL` | `openai/gpt-oss-120b` | variable |
 | `ALLOWED_ORIGINS` | `https://shayeeboy.github.io` | variable |
 | `ACCESS_CODE` | *(optional)* a shared code to gate `/ask` | secret |
 

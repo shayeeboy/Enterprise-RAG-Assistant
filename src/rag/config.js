@@ -38,7 +38,7 @@ module.exports = {
   // different model than the generator to reduce self-preference bias; set
   // JUDGE_MODEL to "" to self-judge with LLM_MODEL. Temperature is forced to 0
   // for determinism. Optional JUDGE_BASE_URL/JUDGE_API_KEY override the endpoint.
-  JUDGE_MODEL: process.env.JUDGE_MODEL !== undefined ? process.env.JUDGE_MODEL : "openai/gpt-oss-120b",
+  JUDGE_MODEL: process.env.JUDGE_MODEL !== undefined ? process.env.JUDGE_MODEL : "openai/gpt-oss-20b",
   JUDGE_TEMPERATURE: num(process.env.JUDGE_TEMPERATURE, 0),
   JUDGE_BASE_URL: process.env.JUDGE_BASE_URL || "",
   JUDGE_API_KEY: process.env.JUDGE_API_KEY || "",
