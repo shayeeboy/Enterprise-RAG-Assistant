@@ -34,6 +34,38 @@ function shuffle(a) {
 
 const isRateLimited = (err) => /429|rate.?limit|tokens per day|TPD/i.test(String(err));
 
+// --- Token-aware sliding-window pacer (mirrors eval-judge.js's reserveBudget) ---
+// Groq's free tier caps tokens-per-minute (gpt-oss-120b = 8000 TPM — see
+// eval-judge.js), and a single RAG answer can cost anywhere from ~200 to
+// ~3000 tokens depending on how much context gets retrieved, so a flat delay
+// between questions can't account for the swing: two "big" questions landing
+// close together can blow the budget on their own. Track actual usage in the
+// trailing 60s (from each call's real meta.tokens.total) and wait before a
+// call that would likely exceed it, using the last real call as the estimate
+// for the next one (nothing better to go on until it returns).
+const BENCH_TPM_BUDGET = Number(process.env.BENCH_TPM || 7200);
+const recentCalls = []; // { t, tokens }
+function tokensUsedLast60s() {
+  const cut = Date.now() - 60000;
+  while (recentCalls.length && recentCalls[0].t < cut) recentCalls.shift();
+  return recentCalls.reduce((s, c) => s + c.tokens, 0);
+}
+let lastTokenEstimate = 2500; // conservative guess before we've seen a real call
+async function reserveBudget() {
+  for (;;) {
+    const used = tokensUsedLast60s();
+    if (used + lastTokenEstimate <= BENCH_TPM_BUDGET || !recentCalls.length) return;
+    const wait = Math.max(500, recentCalls[0].t + 60000 - Date.now() + 300);
+    console.log(`    (throttle: ${used} tok/60s + ~${lastTokenEstimate} > ${BENCH_TPM_BUDGET} — waiting ${Math.round(wait / 1000)}s)`);
+    await sleep(Math.min(wait, 61000));
+  }
+}
+function recordUsage(tokens) {
+  if (!tokens) return;
+  recentCalls.push({ t: Date.now(), tokens });
+  lastTokenEstimate = tokens;
+}
+
 // A single question can fire up to 3 Groq calls (rewrite, gate, generation),
 // so a burst of questions can trip the per-minute (TPM) limit well before the
 // daily cap (TPD). Only the generation call's failure surfaces into
@@ -78,6 +110,7 @@ async function answerWithRetry(q, retries = 4) {
   let grounded = 0;
   for (let i = 0; i < batch.length; i++) {
     const q = batch[i];
+    await reserveBudget();
     let res;
     try {
       res = await answerWithRetry(q);
@@ -85,6 +118,7 @@ async function answerWithRetry(q, retries = 4) {
       console.log(`  [${i + 1}] ERROR ${e.message.slice(0, 80)} — aborting`);
       break;
     }
+    recordUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
     // A rate-limited generation returns ok:false with the 429 in meta.error.
     const err = res && res.meta && res.meta.error;
     if (err && isRateLimited(err)) {
