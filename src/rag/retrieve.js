@@ -45,29 +45,65 @@ async function keywordSearch(qtext, filters) {
   return rows; // best-first
 }
 
-// Reciprocal Rank Fusion: score = Σ 1 / (k + rank) across the lists a doc appears in.
-function reciprocalRankFusion(vectorRows, keywordRows, k) {
+// General Reciprocal Rank Fusion over any number of ranked lists. Each list is
+// best-first and names the per-row score field to carry through ("vscore" /
+// "kscore"); a chunk's fused score sums 1 / (k + rank + 1) over every list it
+// appears in, and the strongest score seen per field is retained so downstream
+// thresholding still sees the best signal across all queries.
+function fuseRankLists(lists, k) {
   const acc = new Map();
-  const bump = (chunk_id, rank, patch) => {
-    const s = acc.get(chunk_id) || { chunk_id, rrf: 0, vscore: null, kscore: null };
-    s.rrf += 1 / (k + rank + 1);
-    Object.assign(s, patch);
-    acc.set(chunk_id, s);
-  };
-  vectorRows.forEach((r, i) => bump(r.chunk_id, i, { vscore: Number(r.vscore) }));
-  keywordRows.forEach((r, i) => bump(r.chunk_id, i, { kscore: Number(r.kscore) }));
+  for (const { rows, field } of lists) {
+    rows.forEach((r, rank) => {
+      const s = acc.get(r.chunk_id) || { chunk_id: r.chunk_id, rrf: 0, vscore: null, kscore: null };
+      s.rrf += 1 / (k + rank + 1);
+      const v = Number(r[field]);
+      if (Number.isFinite(v)) s[field] = s[field] == null ? v : Math.max(s[field], v);
+      acc.set(r.chunk_id, s);
+    });
+  }
   return [...acc.values()].sort((a, b) => b.rrf - a.rrf);
 }
 
+// Reciprocal Rank Fusion: a doc appearing in both lists wins. Two-list special
+// case, kept for external callers and the unit test.
+function reciprocalRankFusion(vectorRows, keywordRows, k) {
+  return fuseRankLists(
+    [{ rows: vectorRows, field: "vscore" }, { rows: keywordRows, field: "kscore" }],
+    k
+  );
+}
+
 async function hybridRetrieve(searchQuery, filters = {}) {
-  const vecLiteral = toVectorLiteral(await embedQuery(searchQuery));
+  // Accept one query or several (e.g. the raw question AND its rewrite, or a
+  // multi-query fan-out). Union the retrieval pools across all of them so a
+  // single drifting rewrite can never DROP a chunk the original would have found.
+  const seen = new Set();
+  const queries = (Array.isArray(searchQuery) ? searchQuery : [searchQuery])
+    .map((q) => (q || "").trim())
+    .filter((q) => q.length >= 3 && !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()));
+  if (!queries.length) return { candidates: [], vectorCount: 0, keywordCount: 0 };
 
-  const [vectorRows, keywordRows] = await Promise.all([
-    vectorSearch(vecLiteral, filters),
-    keywordSearch(searchQuery, filters),
-  ]);
+  // Run dense + sparse search for every query in parallel.
+  const perQuery = await Promise.all(
+    queries.map(async (q) => {
+      const vecLiteral = toVectorLiteral(await embedQuery(q));
+      const [vectorRows, keywordRows] = await Promise.all([
+        vectorSearch(vecLiteral, filters),
+        keywordSearch(q, filters),
+      ]);
+      return { vectorRows, keywordRows };
+    })
+  );
 
-  const fused = reciprocalRankFusion(vectorRows, keywordRows, cfg.RRF_K);
+  const lists = [];
+  let vectorCount = 0;
+  let keywordCount = 0;
+  for (const { vectorRows, keywordRows } of perQuery) {
+    lists.push({ rows: vectorRows, field: "vscore" }, { rows: keywordRows, field: "kscore" });
+    vectorCount += vectorRows.length;
+    keywordCount += keywordRows.length;
+  }
+  const fused = fuseRankLists(lists, cfg.RRF_K);
 
   // Scoring + Threshold: keep a candidate if it clears the vector-similarity
   // floor OR it was a genuine keyword match. Everything else is dropped so the
@@ -80,7 +116,7 @@ async function hybridRetrieve(searchQuery, filters = {}) {
 
   const shortlist = kept.slice(0, cfg.RERANK_INPUT);
   if (!shortlist.length) {
-    return { candidates: [], vectorCount: vectorRows.length, keywordCount: keywordRows.length };
+    return { candidates: [], vectorCount, keywordCount };
   }
 
   // Hydrate full rows + document metadata (title/author for citations).
@@ -97,7 +133,7 @@ async function hybridRetrieve(searchQuery, filters = {}) {
     .map((c) => (byId.has(c.chunk_id) ? { ...byId.get(c.chunk_id), vscore: c.vscore, kscore: c.kscore, rrf: c.rrf } : null))
     .filter(Boolean);
 
-  return { candidates, vectorCount: vectorRows.length, keywordCount: keywordRows.length };
+  return { candidates, vectorCount, keywordCount };
 }
 
 module.exports = { hybridRetrieve, reciprocalRankFusion };

@@ -66,8 +66,12 @@ module.exports = {
 
   // --- Retrieval / ranking knobs ---
   ENABLE_QUERY_REWRITE: bool(process.env.ENABLE_QUERY_REWRITE, true),
-  HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 20), // pool size per search method
-  RERANK_INPUT: num(process.env.RERANK_INPUT, 10), // shortlist fed to the reranker (tuned: 20→10 ~halves rerank latency)
+  // Retrieve on the raw question AND the rewrite (union of pools) so a drifting
+  // rewrite can never drop a chunk the original finds. Flagged so the LLM-judge
+  // can A/B its effect on semantic Hit@5, and it's reversible without a redeploy.
+  UNION_RAW_REWRITE: bool(process.env.UNION_RAW_REWRITE, true),
+  HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 30), // pool size per search method (per query)
+  RERANK_INPUT: num(process.env.RERANK_INPUT, 20), // shortlist fed to the reranker — wide enough that a definition chunk ranked outside the top 10 by hybrid search still reaches the reranker (Groq made LLM latency, not rerank, the bottleneck)
   TOP_K: num(process.env.TOP_K, 6), // chunks kept for the prompt
   VECTOR_THRESHOLD: num(process.env.VECTOR_THRESHOLD, 0.3), // cosine-similarity floor
   RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // per-chunk reranker relevance floor

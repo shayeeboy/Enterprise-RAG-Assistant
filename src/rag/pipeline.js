@@ -102,10 +102,14 @@ async function answerQuestion(rawQuestion, { filters = {}, onStage } = {}) {
   const searchQuery = rw.query;
   stage("rewrite", { searchQuery, rewritten: rw.rewritten });
 
-  // 3–6. Embedding → Hybrid Search → Scoring → Threshold
+  // 3–6. Embedding → Hybrid Search → Scoring → Threshold.
+  // Retrieve on the raw question AND the rewrite (union of pools) when they
+  // differ, so a drifting rewrite can never drop a chunk the original finds.
+  const retrieveQueries =
+    cfg.UNION_RAW_REWRITE && rw.rewritten ? [question, searchQuery] : [searchQuery];
   let retrieval;
   try {
-    retrieval = await span(trace, "retrieve", () => hybridRetrieve(searchQuery, filters));
+    retrieval = await span(trace, "retrieve", () => hybridRetrieve(retrieveQueries, filters));
   } catch (e) {
     trace.error = "retrieve: " + e.message;
     return { ok: false, stage: "retrieve", answer: "Retrieval failed: " + e.message, citations: [], meta: buildMeta(trace) };

@@ -578,6 +578,15 @@ literal `[n]`; the prompt was reworded to fix it. The three alternative hosting
 paths (Groq, Oracle Always-Free self-host, browser WebGPU) and full rationale
 are in [`docs/PHASE-3.md`](docs/PHASE-3.md).
 
+> **Later revisited for retrieval quality.** The `RERANK_INPUT` 20 → 10 cut above
+> was a *latency* trade-off made when the reranker was on the critical path. Once
+> Groq moved the LLM off the critical path, that shortlist was widened back
+> (`RERANK_INPUT` 10 → **20**, `HYBRID_CANDIDATES` 20 → **30**) so a definition
+> chunk ranked outside the top 10 by hybrid search still reaches the reranker, and
+> retrieval now unions the pools of the raw question **and** its rewrite
+> (`UNION_RAW_REWRITE`) so a drifting rewrite can't drop a chunk the original
+> finds — both targeting semantic Hit@5.
+
 ### Deploy-ready hardening
 
 `server.js` is env-driven for hosting the assistant behind a URL. All knobs are
@@ -746,7 +755,7 @@ most of it directly motivated by what the judge's reasoning traces flagged.
 |---|---|---|---|---|
 | Faithfulness (no hallucination) | 81% | ≥ 85% | ≥ 95% | ✅ **shipped:** temperature-0 generation; a citation-grounding trim (`ENFORCE_CITATIONS`); and a local **NLI entailment filter** (`ENFORCE_ENTAILMENT`, opt-in) that drops answer sentences the retrieved context doesn't entail. (~flat vs 76% pre-gate once the harness stopped grading gate refusals as hallucinations; the residual movement is single-run judge variance.) **Next:** tune the NLI threshold against the eval — strict sentence-level NLI is aggressive on synthesized sentences, so it's off by default until measured; harden the grounding prompt ("state only what a source explicitly says — never infer"); report the median of N runs to damp variance. |
 | Answer correctness (0–5) | 3.00 | ≥ 3.6 | ≥ 4.2 | ~flat vs 3.06 pre-gate (the earlier "2.71" was the harness bug). Add 1–2 **few-shot exemplars** of thorough, fully-cited answers; raise `TOP_K` and add **multi-query / query-expansion** retrieval so more of the golden-answer substance reaches the prompt; close the corpus gaps below. |
-| Semantic Hit@5 | 63% | ≥ 90% | ≥ 95% | down from 73% (11/15) last run to 63% (10/16) — single-run judge variance; CI gates on the ≥ 75% regression floor, not this reading. **Expand the knowledge base** to cover the current misses (an absolute-beginner primer and a dedicated scales/technique reference); increase `HYBRID_CANDIDATES`; trial a larger embedding model or a fine-tuned reranker. |
+| Semantic Hit@5 | 63% | ≥ 90% | ≥ 95% | down from 73% (11/15) last run to 63% (10/16) — single-run judge variance; CI gates on the ≥ 75% regression floor, not this reading. ✅ **shipped (targeting this):** widened the rerank funnel (`RERANK_INPUT` 10 → 20, `HYBRID_CANDIDATES` 20 → 30) so a definition chunk ranked outside the top 10 still reaches the reranker; and **raw + rewrite union retrieval** (`UNION_RAW_REWRITE`) so a drifting rewrite can't drop a chunk the original finds — the two dominant miss modes (definition split from its chunk; retrieval instability). **Next:** measure the effect on the LLM-judge Hit@5 (A/B via the flag); **expand the knowledge base** for genuine coverage gaps (an absolute-beginner primer, a dedicated scales/technique reference); add full **multi-query** fan-out; trial a larger embedding model or a fine-tuned reranker. |
 | Out-of-scope refusal | **100%** (3/3) | 100% | 100% (hold) | ✅ **shipped:** an **answerability gate** (`ANSWERABILITY_GATE`) — a focused LLM YES/NO on whether the retrieved chunks actually answer *this* question — catches genuine near-misses the rerank floor can't (their chunks score as topically relevant as valid questions). **Scope correction (honest metrics):** auditing the "leaks" against the source text showed 2 of the original 5 out-of-scope cases were *mislabeled* — Chang's book has a **tuning chapter** and gives explicit **jazz / improvisation** guidance, so `tune-piano` and `jazz-improv` were reclassified as **answerable** (the gate answering them was correct, not a hallucination). The OOS set is now **3 genuinely-uncovered** questions (piano history + 2 off-topic), all refused via the relevance floor + gate. Refusal rate is now measured at **100%** (3/3) on the corrected set. **Next:** report the median of N runs to damp judge variance. |
 | Eval confidence | 22 Qs · single run | 30–40 Qs · median of 3 runs | 50+ Qs · judge ensemble + human calibration | ✅ **shipped:** grew the set 14 → 22 (**19 answerable + 3 out-of-scope**, incl. the piano-history near-miss; two mislabeled near-misses were reclassified after a corpus audit — see the out-of-scope row). **Next:** report the **median of N runs** to damp judge variance; add a second judge model and periodic **human spot-checks** to calibrate the judge itself. |
 
