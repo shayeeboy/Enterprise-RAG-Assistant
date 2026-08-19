@@ -69,7 +69,7 @@ corpus; that lifecycle is the transferable part.
 - **System health** — measured live, per request, via built-in observability persisted to a searchable Neon table.
   - **Tracked:** latency (p50/p95), token cost, and "grounded rate" (does every answer carry a citation).
   - **Current:** $0 LLM cost (Groq free tier); grounded rate (~82% — the rest are honest refusals, since the benchmark deliberately includes thin-coverage / out-of-scope questions the assistant declines) and latency tracked live — see [Live observability](#live-observability).
-  - **Made statistically meaningful:** an automated benchmark (`npm run bench`, a 120-question bank) drives realistic queries through the real pipeline, so the figures rest on a large sample rather than a handful of hits.
+  - **Made statistically meaningful:** system-health metrics are now measured over 122 accumulated automated benchmark queries (`npm run bench`, sampled from a 120-question bank, run nightly until target) — a large enough sample for latency / grounded rate / cost to be statistically meaningful, not a handful of hits.
   - **Kept honest:** benchmark traffic is tagged and counted separately from organic `live` queries — test traffic by design, not a claim of real-world usage.
 - **Retrieval quality** — because "grounded" only confirms an answer *has* a citation, not that it cites the *right* passage.
   - **First-pass (keyword eval, `npm run eval`):** Hit@5 100% (8/8) · MRR 0.938 · out-of-scope refusal 100% (2/2).
@@ -163,19 +163,19 @@ automatically (via `.github/workflows/stats.yml`); search individual attempts
 with `npm run logs -- "your term"`, or hit the live `/stats` endpoint.
 
 <!-- STATS:START -->
-_Auto-updated from **174** logged queries · last refresh 2026-08-19._
+_Auto-updated from **199** logged queries · last refresh 2026-08-19._
 
 | Metric | Value |
 |---|---|
-| Total queries | 174 |
+| Total queries | 199 |
 | — real traffic (live) | 77 |
-| — benchmark traffic (automated) | 97 |
-| Grounded (cited) | 81% |
-| Avg latency | 12,048 ms |
-| p50 / p95 latency | 8,268 / 29,478 ms |
-| Avg stage split — rewrite · retrieve · rerank · llm | 425 · 3,052 · 7,748 · 1,403 ms |
-| Avg tokens / query | 2,061 |
-| Total tokens | 358,616 |
+| — benchmark traffic (automated) | 122 |
+| Grounded (cited) | 80% |
+| Avg latency | 11,824 ms |
+| p50 / p95 latency | 8,856 / 29,079 ms |
+| Avg stage split — rewrite · retrieve · rerank · llm | 445 · 2,856 · 7,478 · 1,512 ms |
+| Avg tokens / query | 2,139 |
+| Total tokens | 425,702 |
 | Total LLM cost | $0.000000 |
 <!-- STATS:END -->
 
