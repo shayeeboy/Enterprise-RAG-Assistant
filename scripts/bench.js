@@ -32,6 +32,28 @@ function shuffle(a) {
   return arr;
 }
 
+const isRateLimited = (err) => /429|rate.?limit|tokens per day|TPD/i.test(String(err));
+
+// A single question can fire up to 3 Groq calls (rewrite, gate, generation),
+// so a burst of questions can trip the per-minute (TPM) limit well before the
+// daily cap (TPD). Only the generation call's failure surfaces into
+// res.meta.error (rewrite is non-fatal, gate is fail-open — see pipeline.js),
+// so that's what we retry here. Mirrors eval-judge.js's withRetry: a TPM 429
+// needs the per-minute window to actually slide, so wait long, not ms.
+async function answerWithRetry(q, retries = 4) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await answerQuestion(q);
+    const err = res && res.meta && res.meta.error;
+    if (!err || !isRateLimited(err)) return res;
+    // A confirmed daily-cap error won't clear on its own within this run —
+    // bubble up immediately rather than burning retries against it.
+    if (quota.isDailyCapError(err) || attempt === retries) return res;
+    const wait = 20000;
+    console.log(`    (${err.slice(0, 70)} — retry ${attempt}/${retries} in ${Math.round(wait / 1000)}s)`);
+    await sleep(wait);
+  }
+}
+
 (async () => {
   if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL is not set.");
@@ -58,16 +80,18 @@ function shuffle(a) {
     const q = batch[i];
     let res;
     try {
-      res = await answerQuestion(q);
+      res = await answerWithRetry(q);
     } catch (e) {
       console.log(`  [${i + 1}] ERROR ${e.message.slice(0, 80)} — aborting`);
       break;
     }
     // A rate-limited generation returns ok:false with the 429 in meta.error.
     const err = res && res.meta && res.meta.error;
-    if (err && /429|rate.?limit|tokens per day|TPD/i.test(err)) {
-      if (quota.isDailyCapError(err)) quota.markExhausted("bench", err);
-      console.log(`  [${i + 1}] rate-limited (daily quota spent) — stopping, ${logged} logged so far`);
+    if (err && isRateLimited(err)) {
+      const dailyCap = quota.isDailyCapError(err);
+      if (dailyCap) quota.markExhausted("bench", err);
+      const why = dailyCap ? "daily quota spent" : "rate limit didn't clear after retries";
+      console.log(`  [${i + 1}] rate-limited (${why}) — stopping, ${logged} logged so far`);
       break;
     }
     await logQuery(q, res, "benchmark");
