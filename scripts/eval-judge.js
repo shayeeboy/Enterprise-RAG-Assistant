@@ -100,6 +100,36 @@ async function reserveBudget(estimate) {
   }
 }
 
+// --- Same pacer, separate pool, for the generator model ---
+// generate() (below) makes up to 3 calls (rewrite, gate, generation) against
+// cfg.LLM_MODEL (gpt-oss-120b), which Groq rate-limits independently from the
+// judge model (gpt-oss-20b) above — so it needs its own budget tracker, not a
+// share of JUDGE_TPM_BUDGET. Without this, generate() only found out about a
+// TPM cap reactively via withRetry's 429 catch (the same gap bench.js had
+// before this pacer was added there — see scripts/bench.js).
+const GEN_TPM_BUDGET = Number(process.env.GEN_TPM || 7200);
+const genCalls = []; // { t, tokens }
+function tokensUsedLast60sGen() {
+  const cut = Date.now() - 60000;
+  while (genCalls.length && genCalls[0].t < cut) genCalls.shift();
+  return genCalls.reduce((s, c) => s + c.tokens, 0);
+}
+let lastGenEstimate = 2500; // conservative guess before we've seen a real call
+async function reserveGenBudget() {
+  for (;;) {
+    const used = tokensUsedLast60sGen();
+    if (used + lastGenEstimate <= GEN_TPM_BUDGET || !genCalls.length) return;
+    const wait = Math.max(500, genCalls[0].t + 60000 - Date.now() + 300);
+    console.log(`    (throttle: ${used} gen tok/60s + ~${lastGenEstimate} > ${GEN_TPM_BUDGET} — waiting ${Math.round(wait / 1000)}s)`);
+    await sleep(Math.min(wait, 61000));
+  }
+}
+function recordGenUsage(tokens) {
+  if (!tokens) return;
+  genCalls.push({ t: Date.now(), tokens });
+  lastGenEstimate = tokens;
+}
+
 // Retry transient failures (429 rate-limit / 5xx) with backoff. For 429 the
 // per-minute window needs real time to slide, so wait long, not milliseconds.
 async function withRetry(fn, label, retries = 5) {
@@ -172,7 +202,9 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   // do NOT feed them to the answer-quality judge.
   const remainingAnswerable = answerable.filter((q) => !doneAnswerableIds.has(q.id));
   for (const q of remainingAnswerable) {
+    await reserveGenBudget();
     const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
+    recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
     if (res.grounded === false) {
       refusedAnswerable.push({ id: q.id, question: q.question });
       console.log(`  REFUSED (coverage miss, not graded)  — ${q.question}`);
@@ -209,7 +241,13 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   console.log("");
   const remainingUnanswerable = unanswerable.filter((q) => !doneOutOfScopeIds.has(q.id));
   for (const q of remainingUnanswerable) {
+    // Same token-aware pacing as the answerable loop: each generate() fires up
+    // to 3 Groq calls against the generator model, so pace against GEN_TPM and
+    // record real usage — otherwise this trailing burst can trip TPM even though
+    // the answerable loop above was paced.
+    await reserveGenBudget();
     const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
+    recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
     const ok = res.grounded === false;
     refusalRows.push({ id: q.id, question: q.question, refused: ok });
     console.log(`  ${ok ? "REFUSED " : "ANSWERED"}  — ${q.question}`);
