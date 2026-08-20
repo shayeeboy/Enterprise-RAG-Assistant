@@ -72,7 +72,7 @@ module.exports = {
   UNION_RAW_REWRITE: bool(process.env.UNION_RAW_REWRITE, true),
   HYBRID_CANDIDATES: num(process.env.HYBRID_CANDIDATES, 30), // pool size per search method (per query)
   RERANK_INPUT: num(process.env.RERANK_INPUT, 20), // shortlist fed to the reranker — wide enough that a definition chunk ranked outside the top 10 by hybrid search still reaches the reranker (Groq made LLM latency, not rerank, the bottleneck)
-  TOP_K: num(process.env.TOP_K, 6), // chunks kept for the prompt
+  TOP_K: num(process.env.TOP_K, 8), // chunks kept for the prompt (6 -> 8: with the wider/union retrieval landing more of the golden substance in reach, give the generator more of it to synthesize a complete answer — targets answer correctness)
   VECTOR_THRESHOLD: num(process.env.VECTOR_THRESHOLD, 0.3), // cosine-similarity floor
   RERANK_THRESHOLD: num(process.env.RERANK_THRESHOLD, 0.05), // per-chunk reranker relevance floor
   // If the BEST reranked chunk scores below this, treat the whole query as

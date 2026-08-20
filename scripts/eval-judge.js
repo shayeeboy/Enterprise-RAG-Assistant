@@ -139,7 +139,15 @@ async function withRetry(fn, label, retries = 5) {
     } catch (e) {
       const msg = e.message || String(e);
       const is429 = /429|rate.?limit/i.test(msg);
-      const transient = is429 || /timeout|ECONNRESET|502|503|504/i.test(msg);
+      // The small judge model intermittently returns empty or malformed output
+      // under throttling (empty, non-JSON, missing/out-of-range fields). Any of
+      // these is a per-call hiccup, so retry with backoff rather than aborting
+      // the whole checkpointed, quota-scarce run on one flaky response.
+      const judgeFlaky = /empty judge output|no JSON object|judge output missing|must be (?:0\|1|int)/i.test(msg);
+      // Transient network faults from the hosted LLM (undici surfaces most as a
+      // bare "fetch failed") should retry, not abort the whole checkpointed run.
+      const network = /timeout|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|network|502|503|504/i.test(msg);
+      const transient = is429 || judgeFlaky || network;
       if (attempt === retries || !transient) throw e;
       const wait = is429 ? 20000 : 2000 * attempt;
       console.log(`    (${label}: ${msg.slice(0, 70)} — retry ${attempt}/${retries} in ${Math.round(wait / 1000)}s)`);

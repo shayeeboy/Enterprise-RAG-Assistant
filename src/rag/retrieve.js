@@ -79,7 +79,10 @@ async function hybridRetrieve(searchQuery, filters = {}) {
   // single drifting rewrite can never DROP a chunk the original would have found.
   const seen = new Set();
   const queries = (Array.isArray(searchQuery) ? searchQuery : [searchQuery])
-    .map((q) => (q || "").trim())
+    // Strip NUL / C0 control bytes: Postgres text (and plainto_tsquery) reject a
+    // 0x00 byte outright ("invalid byte sequence for encoding UTF8"), and an LLM
+    // rewrite occasionally emits one — sanitize here, the shared DB boundary.
+    .map((q) => String(q || "").replace(/[\x00-\x1F\x7F]/g, " ").replace(/\s+/g, " ").trim())
     .filter((q) => q.length >= 3 && !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()));
   if (!queries.length) return { candidates: [], vectorCount: 0, keywordCount: 0 };
 
