@@ -138,16 +138,19 @@ async function withRetry(fn, label, retries = 5) {
       return await fn();
     } catch (e) {
       const msg = e.message || String(e);
-      const is429 = /429|rate.?limit/i.test(msg);
-      // The small judge model intermittently returns empty or malformed output
-      // under throttling (empty, non-JSON, missing/out-of-range fields). Any of
-      // these is a per-call hiccup, so retry with backoff rather than aborting
-      // the whole checkpointed, quota-scarce run on one flaky response.
-      const judgeFlaky = /empty judge output|no JSON object|judge output missing|must be (?:0\|1|int)/i.test(msg);
-      // Transient network faults from the hosted LLM (undici surfaces most as a
-      // bare "fetch failed") should retry, not abort the whole checkpointed run.
+      // The Groq daily-token cap (TPD) is the only truly unrecoverable failure
+      // for this run — it must NOT be retried (it aborts fast and the outer
+      // handler records the retry-after window). Everything else is transient.
+      const isDailyCap = /tokens per day|TPD/i.test(msg);
+      const is429 = /429|rate.?limit/i.test(msg) && !isDailyCap;
       const network = /timeout|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|network|502|503|504/i.test(msg);
-      const transient = is429 || judgeFlaky || network;
+      // ANY judge-call failure other than the daily cap is a flaky-model-output
+      // issue (empty, non-JSON, malformed JSON, missing/out-of-range fields, ...)
+      // worth retrying with backoff, rather than aborting the whole checkpointed,
+      // quota-scarce run on a single bad response. Keyed off the call label so we
+      // don't have to enumerate every possible parse-error string.
+      const judgeFlaky = label.startsWith("judge:") && !isDailyCap;
+      const transient = is429 || network || judgeFlaky;
       if (attempt === retries || !transient) throw e;
       const wait = is429 ? 20000 : 2000 * attempt;
       console.log(`    (${label}: ${msg.slice(0, 70)} — retry ${attempt}/${retries} in ${Math.round(wait / 1000)}s)`);

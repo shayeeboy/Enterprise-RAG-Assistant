@@ -38,13 +38,18 @@ async function chatOllama(messages, o) {
 
 async function chatOpenAICompatible(messages, o) {
   const base = o.baseUrl.replace(/\/$/, "");
+  const payload = { model: o.model, messages, temperature: o.temperature };
+  // JSON mode: when a caller (the LLM-Judge) needs strictly-parseable output,
+  // ask the provider to constrain decoding to valid JSON instead of hoping a
+  // small model formats it correctly and retrying when it doesn't.
+  if (o.responseFormat) payload.response_format = o.responseFormat;
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(o.apiKey ? { Authorization: `Bearer ${o.apiKey}` } : {}),
     },
-    body: JSON.stringify({ model: o.model, messages, temperature: o.temperature }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -69,6 +74,7 @@ function resolve(opts = {}) {
     ollamaHost: opts.ollamaHost || cfg.OLLAMA_HOST,
     baseUrl: opts.baseUrl || cfg.LLM_BASE_URL,
     apiKey: opts.apiKey || cfg.LLM_API_KEY,
+    responseFormat: opts.responseFormat || null,
   };
 }
 

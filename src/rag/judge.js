@@ -154,6 +154,10 @@ function judgeSettings() {
     temperature: cfg.JUDGE_TEMPERATURE, // 0 for determinism
     baseUrl: cfg.JUDGE_BASE_URL || cfg.LLM_BASE_URL,
     apiKey: cfg.JUDGE_API_KEY || cfg.LLM_API_KEY,
+    // Force syntactically-valid JSON at the source (the small judge model
+    // otherwise emits the occasional malformed/empty object). Only the
+    // openai-compatible path honors this; Ollama ignores the unknown field.
+    responseFormat: { type: "json_object" },
   };
 }
 
