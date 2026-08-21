@@ -33,7 +33,7 @@ function loadCheckpoint() {
   try {
     return JSON.parse(fs.readFileSync(CHECKPOINT_PATH, "utf8"));
   } catch {
-    return { results: [], refusedAnswerable: [], refusalRows: [], usageTotal: { prompt: 0, completion: 0, total: 0 }, startedAt: new Date().toISOString() };
+    return { results: [], refusedAnswerable: [], refusalRows: [], judgeErrors: [], usageTotal: { prompt: 0, completion: 0, total: 0 }, startedAt: new Date().toISOString() };
   }
 }
 function saveCheckpoint(state) {
@@ -192,11 +192,16 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   const results = checkpoint.results.slice();
   const refusedAnswerable = checkpoint.refusedAnswerable.slice();
   const refusalRows = checkpoint.refusalRows.slice();
+  // Questions whose generate/judge could not be completed after retries (a
+  // non-daily-cap failure, e.g. the judge model persistently failing to emit
+  // valid JSON for one input). Recorded and skipped so one bad question can't
+  // abort the whole run; excluded from the quality metrics, reported separately.
+  const judgeErrors = (checkpoint.judgeErrors || []).slice();
   let usageTotal = { ...checkpoint.usageTotal };
-  const persist = () => saveCheckpoint({ results, refusedAnswerable, refusalRows, usageTotal, startedAt: checkpoint.startedAt });
+  const persist = () => saveCheckpoint({ results, refusedAnswerable, refusalRows, judgeErrors, usageTotal, startedAt: checkpoint.startedAt });
 
-  const doneAnswerableIds = new Set([...results.map((r) => r.id), ...refusedAnswerable.map((r) => r.id)]);
-  const doneOutOfScopeIds = new Set(refusalRows.map((r) => r.id));
+  const doneAnswerableIds = new Set([...results.map((r) => r.id), ...refusedAnswerable.map((r) => r.id), ...judgeErrors.map((r) => r.id)]);
+  const doneOutOfScopeIds = new Set([...refusalRows.map((r) => r.id), ...judgeErrors.map((r) => r.id)]);
   if (doneAnswerableIds.size || doneOutOfScopeIds.size) {
     console.log(
       `Resuming from checkpoint: ${doneAnswerableIds.size}/${answerable.length} answerable graded, ` +
@@ -213,57 +218,77 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   // do NOT feed them to the answer-quality judge.
   const remainingAnswerable = answerable.filter((q) => !doneAnswerableIds.has(q.id));
   for (const q of remainingAnswerable) {
-    await reserveGenBudget();
-    const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
-    recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
-    if (res.grounded === false) {
-      refusedAnswerable.push({ id: q.id, question: q.question });
-      console.log(`  REFUSED (coverage miss, not graded)  — ${q.question}`);
+    try {
+      await reserveGenBudget();
+      const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
+      recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
+      if (res.grounded === false) {
+        refusedAnswerable.push({ id: q.id, question: q.question });
+        console.log(`  REFUSED (coverage miss, not graded)  — ${q.question}`);
+        persist();
+        await sleep(300);
+        continue;
+      }
+      const judgeInput = {
+        question: q.question,
+        groundTruth: q.ground_truth,
+        contexts: res.contexts || [],
+        systemAnswer: res.answer,
+      };
+      const estimate = estimateJudgeTokens(judgeInput);
+      await reserveBudget(estimate);
+      const verdict = await withRetry(() => judgeCase(judgeInput), `judge:${q.id}`);
+      judgeCalls.push({ t: Date.now(), tokens: (verdict.usage && verdict.usage.total) || estimate });
+      if (verdict.usage) {
+        usageTotal.prompt += verdict.usage.prompt || 0;
+        usageTotal.completion += verdict.usage.completion || 0;
+        usageTotal.total += verdict.usage.total || 0;
+      }
+      const m = verdict.metrics;
+      results.push({ id: q.id, question: q.question, grounded: res.grounded, metrics: m, reasoning: verdict.reasoning });
+      console.log(
+        `  ${m.hallucination_detected ? "HALLU" : "faith"} | correct ${m.answer_correctness_score}/5 | ` +
+        `hit@5 ${m.hit5_retrieval_pass ? "PASS" : "FAIL"}  — ${q.question}`
+      );
+      persist();
+      await sleep(500); // gentle pacing for the free tier
+    } catch (e) {
+      // Daily cap is genuinely unrecoverable this run — let it abort so the
+      // quota-guard records the retry-after and the checkpoint resumes later.
+      if (quota.isDailyCapError(e.message)) throw e;
+      // Anything else (e.g. the judge persistently failing to return valid JSON
+      // for THIS input) is isolated to one question: record it, skip, continue.
+      judgeErrors.push({ id: q.id, question: q.question, stage: "answerable", error: String(e.message).slice(0, 200) });
+      console.log(`  JUDGE-ERROR (skipped, not graded)  — ${q.question}  [${String(e.message).slice(0, 60)}]`);
       persist();
       await sleep(300);
-      continue;
     }
-    const judgeInput = {
-      question: q.question,
-      groundTruth: q.ground_truth,
-      contexts: res.contexts || [],
-      systemAnswer: res.answer,
-    };
-    const estimate = estimateJudgeTokens(judgeInput);
-    await reserveBudget(estimate);
-    const verdict = await withRetry(() => judgeCase(judgeInput), `judge:${q.id}`);
-    judgeCalls.push({ t: Date.now(), tokens: (verdict.usage && verdict.usage.total) || estimate });
-    if (verdict.usage) {
-      usageTotal.prompt += verdict.usage.prompt || 0;
-      usageTotal.completion += verdict.usage.completion || 0;
-      usageTotal.total += verdict.usage.total || 0;
-    }
-    const m = verdict.metrics;
-    results.push({ id: q.id, question: q.question, grounded: res.grounded, metrics: m, reasoning: verdict.reasoning });
-    console.log(
-      `  ${m.hallucination_detected ? "HALLU" : "faith"} | correct ${m.answer_correctness_score}/5 | ` +
-      `hit@5 ${m.hit5_retrieval_pass ? "PASS" : "FAIL"}  — ${q.question}`
-    );
-    persist();
-    await sleep(500); // gentle pacing for the free tier
   }
 
   // --- Out-of-scope: deterministic refusal check ---
   console.log("");
   const remainingUnanswerable = unanswerable.filter((q) => !doneOutOfScopeIds.has(q.id));
   for (const q of remainingUnanswerable) {
-    // Same token-aware pacing as the answerable loop: each generate() fires up
-    // to 3 Groq calls against the generator model, so pace against GEN_TPM and
-    // record real usage — otherwise this trailing burst can trip TPM even though
-    // the answerable loop above was paced.
-    await reserveGenBudget();
-    const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
-    recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
-    const ok = res.grounded === false;
-    refusalRows.push({ id: q.id, question: q.question, refused: ok });
-    console.log(`  ${ok ? "REFUSED " : "ANSWERED"}  — ${q.question}`);
-    persist();
-    await sleep(500);
+    try {
+      // Same token-aware pacing as the answerable loop: each generate() fires up
+      // to 3 Groq calls against the generator model, so pace against GEN_TPM and
+      // record real usage — otherwise this trailing burst can trip TPM even though
+      // the answerable loop above was paced.
+      await reserveGenBudget();
+      const res = await withRetry(() => generate(q.question), `answer:${q.id}`);
+      recordGenUsage(res && res.meta && res.meta.tokens && res.meta.tokens.total);
+      const ok = res.grounded === false;
+      refusalRows.push({ id: q.id, question: q.question, refused: ok });
+      console.log(`  ${ok ? "REFUSED " : "ANSWERED"}  — ${q.question}`);
+      persist();
+      await sleep(500);
+    } catch (e) {
+      if (quota.isDailyCapError(e.message)) throw e;
+      judgeErrors.push({ id: q.id, question: q.question, stage: "out-of-scope", error: String(e.message).slice(0, 200) });
+      console.log(`  JUDGE-ERROR (skipped, refusal not counted)  — ${q.question}  [${String(e.message).slice(0, 60)}]`);
+      persist();
+      await sleep(300);
+    }
   }
   const refused = refusalRows.filter((r) => r.refused).length;
 
@@ -284,7 +309,7 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     timestamp: new Date().toISOString(),
     generator: { provider: cfg.LLM_PROVIDER, model: cfg.LLM_MODEL },
     judge: { provider: cfg.LLM_PROVIDER, model: settings.model, temperature: settings.temperature, mode: settings.model !== cfg.LLM_MODEL ? "cross-judge" : "self-judge" },
-    counts: { answerable: answerable.length, answered: n, refused_answerable: refusedAnswerable.length, out_of_scope: unanswerable.length },
+    counts: { answerable: answerable.length, answered: n, refused_answerable: refusedAnswerable.length, out_of_scope: unanswerable.length, judge_errored: judgeErrors.length },
     metrics: {
       hallucination_rate: Number(halluRate.toFixed(3)),
       faithfulness_rate: Number((1 - halluRate).toFixed(3)),
@@ -299,6 +324,7 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
     per_question: results,
     refused_answerable: refusedAnswerable,
     refusals: refusalRows,
+    judge_errored: judgeErrors,
   };
 
   const outPath = path.join(__dirname, "..", "eval", "judge-results.json");
@@ -312,6 +338,9 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
   console.log(`Mean answer correctness:         ${meanCorrect.toFixed(2)} / 5   (goal ≥ ${GOAL_CORRECTNESS_MIN})  ${goalMet(meanCorrect >= GOAL_CORRECTNESS_MIN)}`);
   console.log(`Semantic Hit@5:                  ${pct(hit5Rate)}   (${results.filter((r) => r.metrics.hit5_retrieval_pass).length}/${n}, goal ≥ ${pct(GOAL_HIT5_MIN)})  ${goalMet(hit5Rate >= GOAL_HIT5_MIN)}`);
   console.log(`Out-of-scope refusal:            ${refusalRate == null ? "n/a" : pct(refusalRate)}   (${refused}/${unanswerable.length}, goal = 100%)  ${goalMet(refusalRate == null || refusalRate >= GOAL_REFUSAL_MIN)}`);
+  if (judgeErrors.length) {
+    console.log(`Judge-errored (skipped, excluded from metrics): ${judgeErrors.length}  (${judgeErrors.map((x) => x.id).join(", ")})`);
+  }
   console.log(`Judge tokens: ${usageTotal.total} | cost: $0 (free tier) | results → eval/judge-results.json`);
 
   // Exit code gates on regression FLOORS (not the aspirational goals), so CI
