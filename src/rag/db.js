@@ -16,8 +16,29 @@ const pool = new Pool({
   max: 4,
 });
 
+// CRITICAL: Neon (serverless) drops idle pooled connections when its compute
+// suspends. pg emits 'error' on the idle client; with NO listener attached,
+// Node treats it as an uncaught exception and CRASHES the process — which on
+// Cloud Run shows up as a 503 + restart loop the moment a dropped connection
+// coincides with a request. Log and swallow: the pool transparently opens a
+// fresh connection on the next query, so a dead idle client must never take
+// down the server.
+pool.on("error", (err) => {
+  console.error("pg pool idle-client error (ignored; pool reconnects on next query):", err.message);
+});
+
 async function query(text, params) {
-  return pool.query(text, params);
+  try {
+    return await pool.query(text, params);
+  } catch (e) {
+    // A connection Neon dropped while idle can surface on the first query after
+    // wake. The pool has already discarded the dead client, so one retry gets a
+    // fresh connection instead of failing the request.
+    if (/Connection terminated|ECONNRESET|server closed the connection|termina/i.test(e.message || "")) {
+      return pool.query(text, params);
+    }
+    throw e;
+  }
 }
 
 async function close() {
